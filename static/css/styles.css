@@ -682,3 +682,37 @@ body.graph-fullscreen #graph-controls {
     transform: translateX(4px);
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
+
+/* Styles pour les badges de contexte */
+#contexts-panel button {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+#contexts-panel button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Animation d'apparition des badges */
+#contexts-panel button span:last-child {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Style pour le message "aucun nœud" */
+#contexts-panel .text-gray-500 {
+    padding: 8px 12px;
+    background: #f9fafb;
+    border-radius: 6px;
+}

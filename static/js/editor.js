@@ -155,42 +155,101 @@ export class EditorManager {
         if (!panel) return;
         
         panel.innerHTML = '';
-        const contexts = ['Tous', ...Object.keys(this.app.state.n4lNotes)];
-
-        contexts.forEach(context => {
-            if (context === 'general' && contexts.length > 2 && 
-                this.app.state.n4lNotes[context]?.length === 0) return;
-
-            const btn = document.createElement('button');
-            const isAll = context === 'Tous';
+        
+        // Calculer le nombre de nœuds par contexte
+        const nodeCountByContext = {};
+        let totalNodes = 0;
+        
+        if (this.app.state.allGraphData && this.app.state.allGraphData.nodes) {
+            this.app.state.allGraphData.nodes.forEach(node => {
+                const ctx = node.context || 'general';
+                nodeCountByContext[ctx] = (nodeCountByContext[ctx] || 0) + 1;
+                totalNodes++;
+            });
+        }
+        
+        // Filtrer les contextes qui ont des nœuds
+        const contextsWithNodes = Object.keys(this.app.state.n4lNotes)
+            .filter(ctx => nodeCountByContext[ctx] > 0);
+        
+        // Ajouter le bouton "Tous" seulement s'il y a des nœuds
+        if (totalNodes > 0) {
+            const allBtn = document.createElement('button');
             const contextFilter = document.getElementById('context-filter');
-            const isActive = isAll ? 
-                (contextFilter && contextFilter.value === '') : 
-                (contextFilter && contextFilter.value === context);
-
-            btn.textContent = context;
-            btn.className = `px-3 py-1 text-xs rounded-full border transition-colors ${
+            const isActive = contextFilter && contextFilter.value === '';
+            
+            allBtn.className = `px-3 py-1 text-xs rounded-full border transition-colors flex items-center gap-1 ${
                 isActive ? 
                 'bg-indigo-600 text-white border-indigo-600' : 
-                'bg-white hover:bg-indigo-50 text-gray-700'
+                'bg-white hover:bg-indigo-50 text-gray-700 border-gray-300'
             }`;
-            btn.dataset.context = isAll ? '' : context;
+            
+            // Créer le contenu avec badge
+            const textSpan = document.createElement('span');
+            textSpan.textContent = 'Tous';
+            
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = `inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full ${
+                isActive ? 'bg-white text-indigo-600' : 'bg-indigo-100 text-indigo-800'
+            }`;
+            badgeSpan.textContent = totalNodes;
+            
+            allBtn.appendChild(textSpan);
+            allBtn.appendChild(badgeSpan);
+            
+            allBtn.onclick = () => {
+                this.app.graph.filterByContext('');
+                this.app.state.currentContext = 'general';
+                document.getElementById('context-input').value = this.app.state.currentContext;
+            };
+            
+            panel.appendChild(allBtn);
+        }
+        
+        // Ajouter les boutons pour les contextes qui ont des nœuds
+        contextsWithNodes.forEach(context => {
+            const nodeCount = nodeCountByContext[context];
+            const btn = document.createElement('button');
+            const contextFilter = document.getElementById('context-filter');
+            const isActive = contextFilter && contextFilter.value === context;
+            
+            btn.className = `px-3 py-1 text-xs rounded-full border transition-colors flex items-center gap-1 ${
+                isActive ? 
+                'bg-indigo-600 text-white border-indigo-600' : 
+                'bg-white hover:bg-indigo-50 text-gray-700 border-gray-300'
+            }`;
+            
+            // Créer le contenu avec badge
+            const textSpan = document.createElement('span');
+            textSpan.textContent = context;
+            
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = `inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold rounded-full ${
+                isActive ? 'bg-white text-indigo-600' : 'bg-gray-100 text-gray-800'
+            }`;
+            badgeSpan.textContent = nodeCount;
+            
+            btn.appendChild(textSpan);
+            btn.appendChild(badgeSpan);
+            btn.dataset.context = context;
             
             btn.onclick = () => {
-                const newContext = isAll ? '' : context;
-                // Mettre à jour le filtre du graphe
-                this.app.graph.filterByContext(newContext);
-                // Mettre à jour le contexte actuel
-                this.app.state.currentContext = isAll ? 'general' : context;
+                this.app.graph.filterByContext(context);
+                this.app.state.currentContext = context;
                 document.getElementById('context-input').value = this.app.state.currentContext;
-                // Faire défiler l'éditeur jusqu'au contexte
-                if (!isAll) {
-                    this.scrollToContext(context);
-                }
+                this.scrollToContext(context);
             };
             
             panel.appendChild(btn);
         });
+        
+        // Si aucun contexte n'a de nœuds, afficher un message
+        if (totalNodes === 0) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'text-xs text-gray-500 italic';
+            emptyMsg.textContent = 'Aucun nœud dans le graphe';
+            panel.appendChild(emptyMsg);
+        }
     }
 
     /**
