@@ -707,7 +707,7 @@ class N4LApp {
         htmlContent += '</div>';
         
         await this.utils.showModal({
-            title: 'ðŸ” Analyse de Cohérence Sémantique',
+            title: 'Analyse de Cohérence Sémantique',
             text: htmlContent,
             isHtml: true
         });
@@ -732,7 +732,7 @@ class N4LApp {
             }
             
             if (item.suggestion) {
-                html += `<div class="text-xs text-gray-600 italic">ðŸ’¡ ${item.suggestion}</div>`;
+                html += `<div class="text-xs text-gray-600 italic">${item.suggestion}</div>`;
             }
             
             html += '</div>';
@@ -744,11 +744,11 @@ class N4LApp {
 
     getInconsistencyTypeLabel(type) {
         const labels = {
-            'temporal_cycle': 'ðŸ”„ Boucle temporelle',
-            'contradictory_relations': 'âš¡ Relations contradictoires',
-            'inconsistent_equivalence': 'â‰  à‰quivalence incohérente',
-            'orphan_node': 'ðŸï¸ NÅ“ud isolé',
-            'disconnected_group': 'ðŸ“¦ Groupe déconnecté'
+            'temporal_cycle': 'Boucle temporelle',
+            'contradictory_relations': 'Relations contradictoires',
+            'inconsistent_equivalence': 'équivalence incohérente',
+            'orphan_node': 'Noeud isolé',
+            'disconnected_group': 'Groupe déconnecté'
         };
         return labels[type] || type;
     }
