@@ -1441,16 +1441,55 @@ export class HistoryManager {
             return;
         }
 
-        const content = this.discoveredPaths.map((path, i) => 
-            `Histoire ${i + 1}:\n${path.nodes.join(' → ')}\n${path.significance || ''}\n`
-        ).join('\n---\n\n');
+        // Créer le contenu du fichier
+        const content = [
+            '=================================',
+            '    HISTOIRES DÉCOUVERTES',
+            `    ${new Date().toLocaleDateString('fr-FR')} - ${new Date().toLocaleTimeString('fr-FR')}`,
+            `    Total: ${this.discoveredPaths.length} histoires`,
+            '=================================\n'
+        ];
 
-        const blob = new Blob([content], { type: 'text/plain' });
+        // Classifier les chemins pour les statistiques
+        const classified = this.classifyPaths(this.discoveredPaths);
+        content.push('📊 STATISTIQUES:');
+        content.push(`   - Histoires courtes (3-4 étapes): ${classified.short.length}`);
+        content.push(`   - Histoires moyennes (5-7 étapes): ${classified.medium.length}`);
+        content.push(`   - Histoires longues (8+ étapes): ${classified.long.length}`);
+        content.push('\n---------------------------------\n');
+
+        // Ajouter chaque histoire
+        this.discoveredPaths.forEach((path, i) => {
+            content.push(`📖 Histoire ${i + 1} (${path.length} étapes)`);
+            content.push(`   ${path.join(' → ')}`);
+            content.push(''); // Ligne vide entre les histoires
+        });
+
+        // Ajouter un résumé à la fin
+        content.push('\n=================================');
+        content.push('FIN DU DOCUMENT');
+        
+        // Créer et télécharger le fichier
+        const blob = new Blob([content.join('\n')], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `histoires_${new Date().toISOString().split('T')[0]}.txt`;
+        a.download = `histoires_${this.discoveredPaths.length}_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
+
+        // Notification de succès
+        const exportBtn = document.getElementById('export-stories-btn');
+        if (exportBtn) {
+            const originalText = exportBtn.innerHTML;
+            exportBtn.innerHTML = '✅ Exporté!';
+            exportBtn.disabled = true;
+            setTimeout(() => {
+                exportBtn.innerHTML = originalText;
+                exportBtn.disabled = false;
+            }, 2000);
+        }
     }
 }
