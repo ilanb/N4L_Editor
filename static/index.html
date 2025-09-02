@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Éditeur N4L Web</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/markdown/markdown.min.js"></script>
+    
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="h-full font-sans text-gray-800">
+    <div id="app" class="flex flex-col h-full">
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+                <h1 class="text-2xl font-bold text-gray-900">Éditeur de Connaissances N4L</h1>
+                <p class="text-sm text-gray-500">Cultivez vos notes en créant des liens sémantiques.</p>
+            </div>
+        </header>
+
+        <div id="upload-view" class="flex-grow flex items-center justify-center fade-in">
+            <div class="max-w-lg w-full p-8 space-y-6 bg-white rounded-xl shadow-md">
+                <div class="text-center">
+                    <h2 class="text-xl font-semibold">Commencer un projet</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="text-center p-4 border rounded-lg">
+        <h3 class="font-semibold mb-2">Partir d'un texte brut</h3>
+        <p class="text-sm text-gray-600 mb-4">Importez un fichier .txt pour extraire les phrases initiales.</p>
+        <button id="import-txt-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md">
+            Importer un .txt
+        </button>
+    </div>
+    <div class="text-center p-4 border rounded-lg">
+        <h3 class="font-semibold mb-2">Analyse par IA</h3>
+        <p class="text-sm text-gray-600 mb-4">Importez un fichier .txt et laissez l'IA construire le graphe.</p>
+        <button id="generate-n4l-ai-btn" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-md">
+            Générer avec IA
+        </button>
+    </div>
+    <div class="text-center p-4 border rounded-lg md:col-span-2">
+        <h3 class="font-semibold mb-2">Reprendre un travail</h3>
+        <p class="text-sm text-gray-600 mb-4">Chargez un fichier .n4l pour continuer à l'éditer et le visualiser.</p>
+        <button id="import-n4l-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-md">
+            Importer un .n4l
+        </button>
+    </div>
+</div>
+<input id="file-upload-txt" type="file" class="hidden" accept=".txt">
+<input id="file-upload-n4l" type="file" class="hidden" accept=".n4l">
+                <p id="file-name" class="text-center text-sm text-gray-500">Aucun fichier sélectionné</p>
+            </div>
+        </div>
+
+        <main id="editor-view" class="hidden flex-grow p-4 md:p-8 overflow-hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                <div class="flex flex-col bg-white rounded-xl shadow-md p-4 h-full overflow-hidden">
+                    <div class="grid grid-cols-2 gap-4 flex-grow h-0 overflow-hidden">
+                        <div class="flex flex-col">
+                            <h2 class="text-lg font-semibold mb-2">1. Concepts (Phrases)</h2>
+                            <div id="concepts-list" class="flex-grow h-0 overflow-y-auto border rounded-md p-2 space-y-2"></div>
+                        </div>
+                        
+                        <div class="flex flex-col">
+                            <div class="flex items-center mb-2">
+                                <h2 class="text-lg font-semibold">2. Sujets Extraits</h2>
+                                <div class="tooltip-container ml-2">
+                                    <span class="tooltip-icon">?</span>
+                                    <span class="tooltip-text"><b>Glisser-déposer :</b> Faites glisser n'importe quel élément de cette liste et déposez-le sur un autre pour créer une relation rapidement.</span>
+                                </div>
+                                <button id="ai-extract-btn" class="ml-auto bg-green-500 hover:bg-green-600 text-white p-2 rounded-md text-xs flex items-center">Auto-Extract (IA)</button>
+                            </div>
+                            <div id="subjects-list" class="flex-grow h-0 overflow-y-auto border rounded-md p-2 space-y-2 bg-gray-50"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-4 border-t">
+                        <div id="help-panel" class="bg-gray-100 p-3 rounded-md mb-4 text-center text-sm text-gray-700 min-h-[50px] flex items-center justify-center"></div>
+                        <h3 class="font-semibold mb-2">3. Actions</h3>
+                        <div id="action-buttons" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            </div>
+                        <div class="mt-4">
+                            <label for="context-input" class="block font-semibold mb-1">Contexte Actuel:</label>
+                            <input type="text" id="context-input" class="w-full p-2 border rounded-md" value="general">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col bg-white rounded-xl shadow-md p-4 h-full">
+                    <div class="mb-2">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-1">Navigation par Contexte</h3>
+                        <div id="contexts-panel" class="flex flex-wrap gap-2"></div>
+                    </div>
+                    
+                    <div class="flex border-b mb-2">
+                        <button id="tab-n4l" class="py-2 px-4 font-semibold border-b-2 border-blue-500 text-blue-600">Fichier N4L</button>
+                        <button id="tab-graph" class="py-2 px-4 font-semibold text-gray-500">Graphe</button>
+                        <button id="tab-timeline" class="py-2 px-4 font-semibold text-gray-500">Chronologie</button>
+                        <button id="download-btn" class="ml-auto bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-md text-sm self-center">Télécharger</button>
+                    </div>
+                    
+                    <div id="n4l-view" class="flex-grow h-0">
+                        <textarea id="n4l-editor"></textarea>
+                    </div>
+                    
+                    <div id="graph-view" class="flex-grow h-0 hidden flex flex-col relative">
+                        <button id="fullscreen-btn" class="absolute top-2 left-2 z-10 bg-white p-2 rounded-full shadow-md hover:bg-gray-100 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v5a1 1 0 002 0V5h4a1 1 0 100-2H3zm14 0a1 1 0 011 1v5a1 1 0 01-2 0V5h-4a1 1 0 010-2h5zM3 17a1 1 0 001-1v-4a1 1 0 00-2 0v5a1 1 0 001 1zm14 0a1 1 0 01-1 1h-5a1 1 0 010-2h4v-4a1 1 0 012 0v5z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <div id="graph-container" class="flex-grow"></div>
+                        <div id="graph-controls" class="pt-2 border-t mt-2 text-sm space-y-2">
+                        </div>
+                    </div>
+                    
+                    <div id="timeline-view" class="flex-grow h-0 hidden p-4">
+                        <div id="timeline-container" class="overflow-y-auto space-y-4 h-full"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div id="modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h3 id="modal-title" class="text-lg font-bold mb-4">Titre</h3>
+                <div id="modal-text" class="mb-4 text-sm max-h-96 overflow-y-auto"></div>
+                <input type="text" id="modal-input" class="w-full p-2 border rounded-md mb-4" placeholder="Votre texte ici...">
+                <div id="relation-suggestions" class="mb-4"></div>
+                <div id="learning-hint-container" class="hidden items-center mb-4">
+                    <input id="learning-hint-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="learning-hint-checkbox" class="ml-2 block text-sm text-gray-900">Je suis en train d'apprendre : <b id="learning-subject"></b></label>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button id="modal-save-analysis" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md hidden">Sauvegarder l'Analyse</button>
+                    <button id="modal-cancel" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-md">Annuler</button>
+                    <button id="modal-ok" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="investigation-panel" class="hidden fixed bottom-4 right-4 bg-white rounded-lg shadow-xl p-4 w-96 max-h-[500px] flex flex-col border-2 border-indigo-500">
+            <div class="flex justify-between items-center mb-3 flex-shrink-0">
+                <h3 class="font-bold text-lg text-indigo-600">Assistant d'Enquête</h3>
+                <button id="close-investigation" class="text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+            <div id="investigation-content" class="flex-grow overflow-y-auto"></div>
+        </div>
+
+        <div id="node-context-menu" class="hidden absolute bg-white shadow-xl rounded-md py-1 text-sm z-[100]"></div>
+    </div>
+
+    <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,517 @@
+/* Styles personnalisés pour l'application N4L */
+
+/* Sélection d'éléments */
+.concept-item.selected-source, 
+.subject-item.selected-source { 
+    background-color: #60a5fa; 
+    color: white; 
+}
+
+.concept-item.selected-dest, 
+.subject-item.selected-dest { 
+    background-color: #f87171; 
+    color: white; 
+}
+
+.concept-item.selected-child, 
+.subject-item.selected-child { 
+    background-color: #a78bfa; 
+    color: white; 
+}
+
+/* Animations */
+.fade-in { 
+    animation: fadeIn 0.5s ease-in-out; 
+}
+
+@keyframes fadeIn { 
+    from { 
+        opacity: 0; 
+        transform: translateY(-10px); 
+    } 
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    } 
+}
+
+/* Tooltips */
+.tooltip-container { 
+    position: relative; 
+    display: inline-flex; 
+    align-items: center; 
+}
+
+.tooltip-icon { 
+    cursor: pointer; 
+    margin-left: 4px; 
+    font-size: 12px; 
+    width: 16px; 
+    height: 16px; 
+    border-radius: 50%; 
+    background-color: #9ca3af; 
+    color: white; 
+    text-align: center; 
+    line-height: 16px; 
+}
+
+.tooltip-text {
+    visibility: hidden;
+    width: 220px;
+    background-color: #1f2937;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 50;
+    top: 150%;
+    left: 50%;
+    margin-left: -110px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+}
+
+.tooltip-text::after {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: transparent transparent #1f2937 transparent;
+}
+
+.tooltip-container:hover .tooltip-text { 
+    visibility: visible; 
+    opacity: 1; 
+}
+
+/* Modal */
+.modal-overlay { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    background-color: rgba(0, 0, 0, 0.5); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    z-index: 50; 
+}
+
+.modal-content { 
+    background: white; 
+    padding: 24px; 
+    border-radius: 8px; 
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+    width: 90%; 
+    max-width: 600px; 
+}
+
+/* Spinner */
+.spinner { 
+    border: 2px solid #f3f3f3; 
+    border-top: 2px solid #3498db; 
+    border-radius: 50%; 
+    width: 16px; 
+    height: 16px; 
+    animation: spin 1s linear infinite; 
+    display: inline-block; 
+    margin-right: 8px; 
+}
+
+@keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+}
+
+/* Graphe et Timeline */
+#graph-container, 
+#timeline-container { 
+    width: 100%; 
+    height: 100%; 
+    border: 1px solid #e5e7eb; 
+    background-color: #f9fafb; 
+}
+
+/* Timeline */
+.timeline-item { 
+    position: relative; 
+    padding-left: 2rem; 
+    border-left: 2px solid #ddd; 
+}
+
+.timeline-item:last-child { 
+    border-left: 2px solid transparent; 
+}
+
+.timeline-item::before { 
+    content: ''; 
+    width: 1rem; 
+    height: 1rem; 
+    background: white; 
+    border: 2px solid #4f46e5; 
+    border-radius: 50%; 
+    position: absolute; 
+    left: -0.5rem; 
+    top: 0.25rem; 
+}
+
+/* Chemins découverts */
+.path-item { 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+}
+
+.path-item .analyze-btn { 
+    opacity: 0; 
+    transition: opacity 0.2s; 
+}
+
+.path-item:hover .analyze-btn { 
+    opacity: 1; 
+}
+
+/* CodeMirror */
+.CodeMirror {
+    height: 100%;
+    font-family: 'Fira Code', 'Courier New', monospace;
+    font-size: 14px;
+}
+
+/* Drag and Drop */
+.drop-target {
+    background-color: #e0e7ff !important;
+    border: 2px dashed #4f46e5;
+}
+
+/* Menu contextuel */
+#node-context-menu a {
+    display: block;
+    padding: 8px 16px;
+    color: #374151;
+    cursor: pointer;
+}
+
+#node-context-menu a:hover {
+    background-color: #f3f4f6;
+}
+
+/* Formes géométriques */
+.triangle {
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 14px solid currentColor;
+    display: inline-block;
+}
+
+/* Anneaux de focus */
+.ring-2 {
+    box-shadow: 0 0 0 2px currentColor;
+}
+
+.ring-offset-2 {
+    box-shadow: 0 0 0 2px white, 0 0 0 4px currentColor;
+}
+
+.ring-blue-500 {
+    --tw-ring-color: #3b82f6;
+}
+
+/* Légende des couches */
+#layer-legend {
+    background: white;
+    padding: 8px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Styles pour le mode Socratique */
+
+/* Boutons de mode */
+.mode-btn {
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    background-color: #E5E7EB;
+    color: #374151;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+}
+
+.mode-btn:hover {
+    background-color: #D1D5DB;
+}
+
+.mode-btn.active {
+    background-color: #4F46E5;
+    color: white;
+}
+
+/* Animation pour les messages */
+#socratic-conversation > div {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Bulles de conversation */
+#socratic-conversation .bg-blue-100 {
+    position: relative;
+}
+
+#socratic-conversation .bg-blue-100::after {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid #DBEAFE;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+}
+
+#socratic-conversation .bg-gray-100 {
+    position: relative;
+}
+
+#socratic-conversation .bg-gray-100::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-right: 8px solid #F3F4F6;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+}
+
+/* Effets de hover pour les suggestions */
+.quick-action {
+    transition: all 0.2s;
+}
+
+.quick-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Animation de la barre de progression */
+#progress-bar {
+    transition: width 0.5s ease-out;
+}
+
+/* Pulsation pour le bouton Socratique actif */
+#socratic-btn.bg-green-600 {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Style pour les insights */
+.insight-card {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border-left: 4px solid #F59E0B;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border-radius: 0.375rem;
+    animation: highlightFade 2s ease-out;
+}
+
+@keyframes highlightFade {
+    0% {
+        background: linear-gradient(135deg, #FDE68A 0%, #FEF3C7 100%);
+        transform: scale(1.02);
+    }
+    100% {
+        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+        transform: scale(1);
+    }
+}
+
+/* Style pour les connexions */
+.connection-card {
+    background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s;
+}
+
+.connection-card:hover {
+    transform: translateX(4px);
+    box-shadow: -2px 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Modal d'overlay */
+#socratic-dialog > div {
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Panneau de progression */
+#socratic-progress {
+    animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Questions avec indices */
+#current-question {
+    position: relative;
+    overflow: hidden;
+}
+
+#current-question::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.1), transparent);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Responsive design */
+@media (max-width: 640px) {
+    #socratic-dialog > div {
+        width: 95%;
+        max-height: 90vh;
+    }
+    
+    .mode-btn {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    #socratic-progress {
+        width: 90%;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+}
+
+/* Accessibilité - Focus visible */
+button:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid #4F46E5;
+    outline-offset: 2px;
+}
+
+/* Animation de typing pour les questions */
+.typing-animation {
+    display: inline-block;
+    width: 20px;
+    height: 10px;
+}
+
+.typing-animation::after {
+    content: '...';
+    animation: typing 1.5s infinite;
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        opacity: 0.2;
+    }
+    30% {
+        opacity: 1;
+    }
+}
+
+/* Styles pour le mode plein écran du graphe */
+body.graph-fullscreen #app > header,
+body.graph-fullscreen #app > main > div > div:first-child,
+body.graph-fullscreen #app > main > div > div:last-child > div:not(#graph-view) {
+    display: none;
+}
+
+body.graph-fullscreen #app,
+body.graph-fullscreen #app > main,
+body.graph-fullscreen #app > main > div {
+    padding: 0;
+    margin: 0;
+    gap: 0;
+}
+
+body.graph-fullscreen #app > main > div > div:last-child,
+body.graph-fullscreen #graph-view {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    padding: 0;
+    z-index: 100;
+}
+
+body.graph-fullscreen #graph-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 8px;
+    border-top: 1px solid #e5e7eb;
+}
