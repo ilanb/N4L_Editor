@@ -79,10 +79,11 @@ export class GraphManager {
                 <div>
                     <label class="font-semibold">Détecteur d'Histoires</label>
                     <div class="flex items-center space-x-2 mt-1">
-                        <button id="discover-paths-btn" class="bg-indigo-500 text-white px-2 py-1 rounded-md text-xs w-full">Découvrir les histoires</button>
+                        <button id="discover-paths-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded-md text-xs w-full transition-colors">
+                            Découvrir les histoires
+                        </button>
                     </div>
                 </div>
-            </div>
             
             <div class="flex items-center space-x-4 mt-2">
                 <input type="text" id="search-node" placeholder="Rechercher un nœud..." class="p-1 border rounded-md text-xs w-40">
@@ -106,14 +107,18 @@ export class GraphManager {
                     Synthèse IA
                 </button>
             </div>
-            
-            <div id="paths-list-container" class="mt-2 text-xs h-24 overflow-y-auto"></div>
         `;
 
         const controlsContainer = document.getElementById('graph-controls');
         if (controlsContainer) {
             controlsContainer.innerHTML = controlsHTML;
         }
+
+        document.getElementById('discover-paths-btn')?.addEventListener('click', () => {
+            if (this.app.history && this.app.history.showStoriesModal) {
+                this.app.history.showStoriesModal();
+            }
+        });
 
         // Ajouter la légende des couches
         const legendHTML = `
@@ -1364,5 +1369,32 @@ export class GraphManager {
                 this.graph.fit();
             }
         }, 300);
+    }
+
+    highlightPath(nodeIds) {
+        if (!this.cy) return;
+
+        // Réinitialiser tous les styles
+        this.cy.elements().removeClass('highlighted dimmed');
+        
+        // Trouver tous les éléments du chemin
+        const pathNodes = this.cy.nodes().filter(node => nodeIds.includes(node.id()));
+        const pathEdges = this.cy.edges().filter(edge => {
+            const sourceId = edge.source().id();
+            const targetId = edge.target().id();
+            const sourceIndex = nodeIds.indexOf(sourceId);
+            const targetIndex = nodeIds.indexOf(targetId);
+            return sourceIndex !== -1 && targetIndex !== -1 && Math.abs(sourceIndex - targetIndex) === 1;
+        });
+
+        // Ajouter la classe highlighted aux éléments du chemin
+        pathNodes.addClass('highlighted');
+        pathEdges.addClass('highlighted');
+        
+        // Diminuer l'opacité des autres éléments
+        this.cy.elements().not(pathNodes).not(pathEdges).addClass('dimmed');
+
+        // Centrer la vue sur le chemin
+        this.cy.fit(pathNodes, 50);
     }
 }

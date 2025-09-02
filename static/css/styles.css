@@ -515,3 +515,23 @@ body.graph-fullscreen #graph-controls {
     padding: 8px;
     border-top: 1px solid #e5e7eb;
 }
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Curseur de déplacement pour les headers draggables */
+.cursor-move {
+    cursor: move;
+}
+
+/* Transition douce pour l'opacité lors du drag */
+.opacity-90 {
+    opacity: 0.9;
+    transition: opacity 0.2s;
+}

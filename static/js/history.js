@@ -9,6 +9,7 @@ export class HistoryManager {
         this.autoSaveInterval = null;
         this.changeBuffer = [];
         this.lastSaveTime = Date.now();
+        this.discoveredPaths = [];
     }
 
     init() {
@@ -32,7 +33,8 @@ export class HistoryManager {
 
         // Créer le panneau d'historique
         this.createHistoryPanel();
-        
+        // Créer la modal pour les histoires
+        this.createStoriesModal();
         // Ajouter les indicateurs dans le panneau d'aide
         this.createStatusIndicators();
     }
@@ -98,6 +100,173 @@ export class HistoryManager {
         document.getElementById('save-version-btn').onclick = () => this.saveVersion();
         document.getElementById('compare-versions-btn').onclick = () => this.showComparisonDialog();
         document.getElementById('clear-history-btn').onclick = () => this.clearHistory(); // <-- NOUVEAU
+    }
+
+    createStoriesModal() {
+        // Créer la modal pour les histoires découvertes
+        const modal = document.createElement('div');
+        modal.id = 'stories-modal';
+        modal.className = 'hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[9999]';
+        modal.innerHTML = `
+            <div id="stories-modal-content" class="absolute top-20 left-1/2 transform -translate-x-1/2 p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white" style="position: absolute;">
+                <div class="mt-3">
+                    <div id="stories-modal-header" class="flex justify-between items-center mb-4 select-none bg-gray-50 -m-5 p-5 rounded-t-md hover:bg-gray-100" style="cursor: move;">
+                        <h3 class="text-lg font-bold text-gray-900 flex items-center pointer-events-none">
+                            Histoires Découvertes
+                            <span class="ml-2 text-xs text-gray-500">(Glissez pour déplacer)</span>
+                        </h3>
+                        <button id="close-stories-modal" class="text-gray-400 hover:text-gray-600 pointer-events-auto">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="mb-4 mt-5">
+                        <p class="text-sm text-gray-600">
+                            Les histoires sont des chemins narratifs détectés dans votre graphe de connaissances.
+                            Chaque chemin représente une progression logique ou thématique entre les concepts.
+                        </p>
+                    </div>
+                    
+                    <div id="stories-content" class="max-h-96 overflow-y-auto">
+                        <!-- Le contenu des histoires sera injecté ici -->
+                    </div>
+                    
+                    <div class="mt-4 flex justify-end space-x-2">
+                        <button id="refresh-stories-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-md text-sm">
+                            Actualiser
+                        </button>
+                        <button id="export-stories-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md text-sm">
+                            Exporter
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Event listeners pour la modal
+        document.getElementById('close-stories-modal').onclick = () => this.hideStoriesModal();
+        document.getElementById('refresh-stories-btn').onclick = () => this.discoverPaths();
+        document.getElementById('export-stories-btn').onclick = () => this.exportStories();
+        
+        // Fermer la modal en cliquant à l'extérieur (mais pas sur le contenu)
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                this.hideStoriesModal();
+            }
+        };
+        
+        // Rendre la modal déplaçable après un court délai pour s'assurer que le DOM est prêt
+        setTimeout(() => {
+            this.makeDraggable('stories-modal-content', 'stories-modal-header');
+        }, 100);
+    }
+
+    makeDraggable(elementId, headerId) {
+        const element = document.getElementById(elementId);
+        const header = document.getElementById(headerId);
+        if (!element || !header) return;
+        
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        // Assurer que l'élément est en position absolute
+        element.style.position = 'absolute';
+        
+        // Si l'élément a des classes de centrage, les convertir en position fixe
+        if (element.classList.contains('transform')) {
+            const rect = element.getBoundingClientRect();
+            element.style.left = rect.left + 'px';
+            element.style.top = rect.top + 'px';
+            element.classList.remove('left-1/2', 'transform', '-translate-x-1/2');
+        }
+        
+        header.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+        
+        // Support tactile
+        header.addEventListener('touchstart', dragStart, { passive: false });
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('touchend', dragEnd);
+        
+        function dragStart(e) {
+            // Vérifier si on clique sur le bouton fermer
+            if (e.target.closest('button')) {
+                return;
+            }
+            
+            if (e.type === 'touchstart') {
+                initialX = e.touches[0].clientX - xOffset;
+                initialY = e.touches[0].clientY - yOffset;
+            } else {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+            }
+            
+            if (e.target === header || header.contains(e.target)) {
+                isDragging = true;
+                element.style.opacity = '0.9';
+                element.style.cursor = 'grabbing';
+                header.style.cursor = 'grabbing';
+                e.preventDefault();
+            }
+        }
+        
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                
+                if (e.type === 'touchmove') {
+                    currentX = e.touches[0].clientX - initialX;
+                    currentY = e.touches[0].clientY - initialY;
+                } else {
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                }
+                
+                xOffset = currentX;
+                yOffset = currentY;
+                
+                // Limiter aux bords de l'écran
+                const rect = element.getBoundingClientRect();
+                let newX = currentX;
+                let newY = currentY;
+                
+                // Vérifier les limites
+                if (rect.left + currentX < 0) {
+                    newX = -rect.left;
+                }
+                if (rect.right + currentX > window.innerWidth) {
+                    newX = window.innerWidth - rect.right;
+                }
+                if (rect.top + currentY < 0) {
+                    newY = -rect.top;
+                }
+                if (rect.bottom + currentY > window.innerHeight) {
+                    newY = window.innerHeight - rect.bottom;
+                }
+                
+                element.style.transform = `translate(${newX}px, ${newY}px)`;
+            }
+        }
+        
+        function dragEnd(e) {
+            if (isDragging) {
+                isDragging = false;
+                element.style.opacity = '1';
+                element.style.cursor = 'default';
+                header.style.cursor = 'move';
+            }
+        }
     }
 
     createStatusIndicators() {
@@ -782,5 +951,506 @@ export class HistoryManager {
         } catch (error) {
             console.error('Erreur export rapport:', error);
         }
+    }
+
+    // Méthodes pour les histoires
+    showStoriesModal() {
+        const modal = document.getElementById('stories-modal');
+        if (modal) {
+            // Si on est en mode plein écran, ajouter la modal au container fullscreen
+            const fullscreenElement = document.fullscreenElement || 
+                                    document.webkitFullscreenElement || 
+                                    document.mozFullScreenElement || 
+                                    document.msFullscreenElement;
+            
+            if (fullscreenElement) {
+                // Déplacer temporairement la modal dans le container fullscreen
+                fullscreenElement.appendChild(modal);
+            } else {
+                // S'assurer que la modal est dans body
+                if (modal.parentElement !== document.body) {
+                    document.body.appendChild(modal);
+                }
+            }
+            
+            modal.classList.remove('hidden');
+            this.discoverPaths(); // Charger automatiquement les histoires
+        }
+    }
+
+    hideStoriesModal() {
+        const modal = document.getElementById('stories-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            
+            // Toujours remettre la modal dans body quand on la cache
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+        }
+    }
+
+    async discoverPaths() {
+        try {
+            const response = await fetch('/api/find-all-paths', {  // Route correcte
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.app.state.n4lNotes)  // Utiliser n4lNotes comme dans graph.js
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const paths = await response.json();
+            this.discoveredPaths = paths;
+            this.displayPaths(paths);
+        } catch (error) {
+            console.error('Erreur lors de la découverte des chemins:', error);
+            const container = document.getElementById('stories-content');
+            if (container) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <p>Erreur lors de la découverte des chemins.</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    displayPaths(paths) {
+        const container = document.getElementById('stories-content');
+        if (!container) return;
+
+        if (!paths || paths.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <p>Aucune histoire détectée pour le moment.</p>
+                    <p class="text-sm mt-2">Ajoutez plus de connexions entre vos concepts pour découvrir des chemins narratifs.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Analyser et classer les chemins
+        const classifiedPaths = this.classifyPaths(paths);
+        
+        // Créer l'interface avec filtres
+        container.innerHTML = `
+            <div class="mb-4 bg-blue-50 p-3 rounded-lg">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-semibold text-blue-900">
+                        📊 ${paths.length} histoires découvertes
+                    </span>
+                    <span class="text-xs text-blue-700">
+                        ${classifiedPaths.short.length} courtes, 
+                        ${classifiedPaths.medium.length} moyennes, 
+                        ${classifiedPaths.long.length} longues
+                    </span>
+                </div>
+                
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <select id="path-length-filter" class="text-xs px-2 py-1 border rounded">
+                        <option value="all">Toutes les longueurs</option>
+                        <option value="short">Courtes (3-4 nœuds)</option>
+                        <option value="medium">Moyennes (5-7 nœuds)</option>
+                        <option value="long">Longues (8+ nœuds)</option>
+                    </select>
+                    
+                    <select id="path-sort" class="text-xs px-2 py-1 border rounded">
+                        <option value="length-asc">Longueur ↑</option>
+                        <option value="length-desc">Longueur ↓</option>
+                        <option value="alpha">Alphabétique</option>
+                    </select>
+                    
+                    <input type="text" id="path-search" placeholder="Filtrer par mot-clé..." 
+                        class="text-xs px-2 py-1 border rounded flex-1 min-w-32">
+                    
+                    <button id="path-random" class="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600">
+                        🎲 Aléatoire
+                    </button>
+                </div>
+                
+                <div class="text-xs text-gray-600">
+                    💡 Astuce: Les chemins sont triés par pertinence. Utilisez les filtres pour explorer différents types d'histoires.
+                </div>
+            </div>
+            
+            <div id="paths-filtered-list" class="space-y-2 max-h-96 overflow-y-auto">
+                <!-- Les chemins filtrés seront affichés ici -->
+            </div>
+            
+            <div class="mt-3 text-center">
+                <button id="load-more-paths" class="text-xs px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded">
+                    Charger plus (affichage: <span id="displayed-count">20</span>/${paths.length})
+                </button>
+            </div>
+        `;
+
+        // Stocker les chemins classifiés pour le filtrage
+        this.classifiedPaths = classifiedPaths;
+        this.currentDisplayCount = 20;
+        
+        // Afficher les premiers chemins
+        this.updateFilteredPaths();
+        
+        // Ajouter les event listeners
+        document.getElementById('path-length-filter').addEventListener('change', () => this.updateFilteredPaths());
+        document.getElementById('path-sort').addEventListener('change', () => this.updateFilteredPaths());
+        document.getElementById('path-search').addEventListener('input', () => this.updateFilteredPaths());
+        document.getElementById('path-random').addEventListener('click', () => this.showRandomPath());
+        document.getElementById('load-more-paths').addEventListener('click', () => this.loadMorePaths());
+    }
+
+    classifyPaths(paths) {
+        const classified = {
+            short: [],   // 3-4 nœuds
+            medium: [],  // 5-7 nœuds
+            long: []     // 8+ nœuds
+        };
+        
+        paths.forEach(path => {
+            if (path.length <= 4) {
+                classified.short.push(path);
+            } else if (path.length <= 7) {
+                classified.medium.push(path);
+            } else {
+                classified.long.push(path);
+            }
+        });
+        
+        return classified;
+    }
+
+    updateFilteredPaths() {
+        const lengthFilter = document.getElementById('path-length-filter').value;
+        const sortOption = document.getElementById('path-sort').value;
+        const searchTerm = document.getElementById('path-search').value.toLowerCase();
+        
+        // Obtenir les chemins selon le filtre de longueur
+        let filteredPaths = [];
+        if (lengthFilter === 'all') {
+            filteredPaths = [...this.discoveredPaths];
+        } else {
+            filteredPaths = [...this.classifiedPaths[lengthFilter]];
+        }
+        
+        // Filtrer par mot-clé
+        if (searchTerm) {
+            filteredPaths = filteredPaths.filter(path => 
+                path.some(node => node.toLowerCase().includes(searchTerm))
+            );
+        }
+        
+        // Trier
+        switch(sortOption) {
+            case 'length-asc':
+                filteredPaths.sort((a, b) => a.length - b.length);
+                break;
+            case 'length-desc':
+                filteredPaths.sort((a, b) => b.length - a.length);
+                break;
+            case 'alpha':
+                filteredPaths.sort((a, b) => a[0].localeCompare(b[0]));
+                break;
+        }
+        
+        // Afficher seulement les N premiers
+        const displayPaths = filteredPaths.slice(0, this.currentDisplayCount);
+        this.renderFilteredPaths(displayPaths, filteredPaths.length);
+    }
+
+    renderFilteredPaths(paths, totalCount) {
+        const container = document.getElementById('paths-filtered-list');
+        if (!container) return;
+        
+        if (paths.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-500 py-4">Aucune histoire ne correspond aux critères</div>';
+            return;
+        }
+        
+        container.innerHTML = paths.map((path, index) => {
+            const realIndex = this.discoveredPaths.indexOf(path);
+            const pathPreview = path.length > 5 
+                ? `${path.slice(0, 3).join(' → ')} ... → ${path.slice(-2).join(' → ')}`
+                : path.join(' → ');
+                
+            return `
+                <div class="p-3 border rounded-lg hover:bg-gray-50 transition-colors path-item" data-index="${realIndex}">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex-1">
+                            <span class="text-xs font-semibold text-gray-700">
+                                Histoire #${realIndex + 1}
+                            </span>
+                            <span class="ml-2 text-xs px-2 py-0.5 rounded-full ${this.getLengthBadgeColor(path.length)}">
+                                ${path.length} étapes
+                            </span>
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="window.app.history.visualizePath(${realIndex})" 
+                                    title="Visualiser sur le graphe"
+                                    class="text-xs px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded">
+                                Visulaliser
+                            </button>
+                            <button onclick="window.app.history.analyzePathWithAI(${realIndex})" 
+                                    title="Analyser avec l'IA"
+                                    class="text-xs px-2 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded">
+                                Synthèse IA
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-600 break-all">
+                        ${pathPreview}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        // Mettre à jour le compteur
+        document.getElementById('displayed-count').textContent = Math.min(this.currentDisplayCount, totalCount);
+        
+        // Cacher le bouton "Charger plus" si tout est affiché
+        const loadMoreBtn = document.getElementById('load-more-paths');
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = paths.length >= totalCount ? 'none' : 'inline-block';
+        }
+    }
+
+    getLengthBadgeColor(length) {
+        if (length <= 4) return 'bg-green-100 text-green-800';
+        if (length <= 7) return 'bg-yellow-100 text-yellow-800';
+        return 'bg-red-100 text-red-800';
+    }
+
+    loadMorePaths() {
+        this.currentDisplayCount += 20;
+        this.updateFilteredPaths();
+    }
+
+    showRandomPath() {
+        const randomIndex = Math.floor(Math.random() * this.discoveredPaths.length);
+        this.visualizePath(randomIndex);
+        
+        // Scroll jusqu'au chemin dans la liste
+        const pathElement = document.querySelector(`[data-index="${randomIndex}"]`);
+        if (pathElement) {
+            pathElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            pathElement.classList.add('bg-yellow-100');
+            setTimeout(() => pathElement.classList.remove('bg-yellow-100'), 2000);
+        }
+    }
+
+    visualizePath(pathIndex) {
+        const path = this.discoveredPaths[pathIndex];
+        if (!path) return;
+        
+        // NE PAS fermer la modal
+        // this.hideStoriesModal(); // Commenté pour garder la modal ouverte
+        
+        // Mettre en évidence le chemin sélectionné dans la liste
+        document.querySelectorAll('.path-item').forEach(item => {
+            item.classList.remove('ring-2', 'ring-blue-500');
+        });
+        const selectedItem = document.querySelector(`[data-index="${pathIndex}"]`);
+        if (selectedItem) {
+            selectedItem.classList.add('ring-2', 'ring-blue-500');
+        }
+        
+        // Visualiser sur le graphe
+        const pathEdges = [];
+        for (let i = 0; i < path.length - 1; i++) {
+            pathEdges.push({ from: path[i], to: path[i+1] });
+        }
+        
+        if (this.app.graph && this.app.graph.graph) {
+            const nodes = new vis.DataSet(this.app.state.allGraphData.nodes.map(n => {
+                const isHighlighted = path.includes(n.id);
+                return {
+                    ...n,
+                    color: {
+                        border: isHighlighted ? '#dc2626' : '#4f46e5',
+                        background: isHighlighted ? '#fecaca' : 'white'
+                    }
+                };
+            }));
+            
+            const edges = new vis.DataSet(this.app.state.allGraphData.edges.map((e, index) => {
+                const isHighlighted = pathEdges.some(pe => 
+                    (pe.from === e.from && pe.to === e.to) || 
+                    (pe.from === e.to && pe.to === e.from)
+                );
+                return {
+                    ...e,
+                    id: `edge-${index}`,
+                    color: isHighlighted ? '#dc2626' : (e.color || '#94a3b8'),
+                    width: isHighlighted ? 3 : 1,
+                    arrows: e.type === 'equivalence' ? 'to, from' : 'to'
+                };
+            }));
+            
+            this.app.graph.graph.setData({ nodes, edges });
+            
+            // Centrer la vue sur les nœuds du chemin
+            setTimeout(() => {
+                this.app.graph.graph.fit({
+                    nodes: path,
+                    animation: true
+                });
+            }, 100);
+        }
+    }
+
+    highlightPathByIndex(pathIndex) {
+        this.visualizePath(pathIndex);
+    }
+
+    getPathTypeColor(type) {
+        const colors = {
+            'causal': 'bg-green-100 text-green-800',
+            'temporal': 'bg-blue-100 text-blue-800',
+            'thematic': 'bg-purple-100 text-purple-800',
+            'logical': 'bg-orange-100 text-orange-800'
+        };
+        return colors[type] || 'bg-gray-100 text-gray-800';
+    }
+
+    highlightPath(nodeIds) {
+        if (this.app.graph && this.app.graph.highlightPath) {
+            this.app.graph.highlightPath(nodeIds);
+            this.hideStoriesModal(); // Fermer la modal pour voir le graphe
+        }
+    }
+
+    async analyzePathWithAI(pathIndex) {
+        const path = this.discoveredPaths[pathIndex];
+        if (!path) return;
+
+        // Ajouter un indicateur de chargement sur le bouton
+        const analyzeButtons = document.querySelectorAll(`[data-index="${pathIndex}"] button`);
+        const analyzeBtn = analyzeButtons[1]; // Le deuxième bouton est celui d'analyse
+        const originalContent = analyzeBtn ? analyzeBtn.innerHTML : 'Synthèse IA';
+        
+        if (analyzeBtn) {
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<span class="inline-block animate-spin">⏳</span>';
+        }
+
+        try {
+            const response = await fetch('/api/analyze-path', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    path: path,
+                    notes: this.app.state.n4lNotes
+                })
+            });
+
+            if (response.ok) {
+                const analysis = await response.text();
+                this.showPathAnalysis(path, analysis, pathIndex);
+            }
+        } catch (error) {
+            console.error('Erreur lors de l\'analyse du chemin:', error);
+            alert('Erreur lors de l\'analyse du chemin');
+        } finally {
+            // Restaurer le bouton
+            if (analyzeBtn) {
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = originalContent;
+            }
+        }
+    }
+
+    showPathAnalysis(path, analysis, pathIndex) {
+        // Déterminer où ajouter la modal d'analyse
+        const fullscreenElement = document.fullscreenElement || 
+                                document.webkitFullscreenElement || 
+                                document.mozFullScreenElement || 
+                                document.msFullscreenElement;
+        
+        const parentElement = fullscreenElement || document.body;
+        
+        // Créer une modal avec un z-index très élevé
+        const analysisDiv = document.createElement('div');
+        analysisDiv.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[10000]';
+        analysisDiv.innerHTML = `
+            <div class="relative top-10 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-lg font-bold flex items-center">
+                        Analyse IA - Histoire #${pathIndex + 1}
+                    </h3>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                            class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="mb-4 p-3 bg-blue-50 rounded">
+                    <h4 class="font-semibold mb-2 text-sm">Chemin analysé (${path.length} étapes):</h4>
+                    <div class="text-xs text-gray-700 break-all">
+                        ${path.map((node, i) => `
+                            <span class="inline-flex items-center mb-1">
+                                <span class="px-2 py-1 bg-white rounded border">${node}</span>
+                                ${i < path.length - 1 ? '<span class="mx-1">→</span>' : ''}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="mb-4 max-h-96 overflow-y-auto">
+                    <h4 class="font-semibold mb-2">Analyse sémantique :</h4>
+                    <div class="text-sm text-gray-700 whitespace-pre-wrap bg-gray-50 p-4 rounded">
+                        ${analysis || 'Analyse en cours...'}
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-2">
+                    <button onclick="window.app.history.visualizePath(${pathIndex}); this.parentElement.parentElement.parentElement.remove();" 
+                            class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded text-sm">
+                        Visualiser sur le graphe
+                    </button>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                            class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded text-sm">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        parentElement.appendChild(analysisDiv);
+        
+        // Rendre la modal d'analyse déplaçable
+        setTimeout(() => {
+            this.makeDraggable(contentId, headerId);
+        }, 100);
+        
+        // Fermer en cliquant à l'extérieur
+        analysisDiv.onclick = (e) => {
+            if (e.target === analysisDiv) {
+                analysisDiv.remove();
+            }
+        };
+    }
+
+    exportStories() {
+        if (!this.discoveredPaths || this.discoveredPaths.length === 0) {
+            alert('Aucune histoire à exporter');
+            return;
+        }
+
+        const content = this.discoveredPaths.map((path, i) => 
+            `Histoire ${i + 1}:\n${path.nodes.join(' → ')}\n${path.significance || ''}\n`
+        ).join('\n---\n\n');
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `histoires_${new Date().toISOString().split('T')[0]}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 }
