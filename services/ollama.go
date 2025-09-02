@@ -72,9 +72,9 @@ func (s *OllamaService) CallOllama(model, prompt string, format string) (string,
 
 // ExtractSubjectsWithAI uses AI to extract subjects from text
 func (s *OllamaService) ExtractSubjectsWithAI(text string) ([]string, error) {
-	prompt := `From the following text, identify the named entities (people, places, objects). 
-	Respond only with a JSON object containing lists for each category 
-	(e.g., {"people": [...], "places": [...]}). The text is: ` + text
+	prompt := `À partir du texte suivant, identifiez les entités nommées (personnes, lieux, objets).
+Répondez uniquement avec un objet JSON contenant des listes pour chaque catégorie
+(par exemple, {"personnes": [...], "lieux": [...]}). Le texte est : ` + text
 
 	// Using a model fine-tuned for NER (Named Entity Recognition) is better here.
 	response, err := s.CallOllama("llama3", prompt, "json")
@@ -123,10 +123,10 @@ func (s *OllamaService) AnalyzeGraph(graphData models.GraphData) (string, error)
 		}
 	}
 
-	prompt := fmt.Sprintf(`You are an intelligent investigation assistant. 
-	Based *only* on the following facts, write a summary of the situation. 
-	What are the key points, main suspects, and avenues to explore? 
-	Be concise and direct.\n\n%s`, sb.String())
+	prompt := fmt.Sprintf(`Vous êtes un assistant d'enquête intelligent.
+En vous basant uniquement sur les faits suivants, rédigez un résumé de la situation.
+Quels sont les points clés, les principaux suspects et les pistes à explorer ?
+Soyez concis et direct.\n\n%s`, sb.String())
 
 	return s.Generate(prompt, "")
 }
@@ -135,12 +135,12 @@ func (s *OllamaService) AnalyzeGraph(graphData models.GraphData) (string, error)
 func (s *OllamaService) AnalyzePath(path []string, notes map[string][]string) (string, error) {
 	storyBuilder := BuildPathStory(path, notes)
 
-	prompt := fmt.Sprintf(`You are a semantic analyst. 
-	The following sequence of facts represents a logical path discovered in a knowledge graph: 
-	\n%s\n
-	Analyze this sequence and determine if it is primarily a causal chain, 
-	a simple correlation, or if it reveals a possible contradiction. 
-	Justify your answer in one or two sentences.`, storyBuilder)
+	prompt := fmt.Sprintf(`Vous êtes un analyste sémantique.
+La séquence de faits suivante représente un chemin logique découvert dans un graphe de connaissances :
+\n%s\n
+Analysez cette séquence et déterminez s'il s'agit principalement d'une chaîne causale,
+d'une simple corrélation, ou si elle révèle une possible contradiction.
+Justifiez votre réponse en une ou deux phrases.`, storyBuilder)
 
 	return s.Generate(prompt, "")
 }
