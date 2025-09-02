@@ -769,60 +769,349 @@ class N4LApp {
             const events = await response.json();
             console.log("LOG: Received timeline events:", events);
             
-            // Vérifier que la vue timeline est visible
-            const timelineView = document.getElementById('timeline-view');
-            if (!timelineView) {
-                console.error('LOG: Timeline view not found');
-                return;
-            }
-            
             const container = document.getElementById('timeline-container');
             if (!container) {
                 console.error('LOG: Timeline container not found');
                 return;
             }
             
-            // Vider le container
             container.innerHTML = '';
-            console.log("LOG: Container cleared");
             
             if (!events || events.length === 0) {
-                container.innerHTML = `<div class="text-center text-gray-500 p-8">Aucun événement chronologique détecté. Ajoutez des marqueurs temporels dans vos notes (ex: "22h", "lendemain", "soirée").</div>`;
-                console.log("LOG: No events message displayed");
+                container.innerHTML = `<div class="text-center text-gray-500 p-8">
+                    Aucun événement chronologique détecté.
+                    <br/>Vérifiez que vos notes suivent le format: DD/MM/YYYY HHhMM -> Événement -> Détails
+                </div>`;
                 return;
             }
             
-            // Créer les éléments de timeline
+            // Créer l'affichage de la timeline
+            let html = `<div class="space-y-3">`;
+            
             events.forEach((event, index) => {
-                console.log(`LOG: Creating timeline item ${index}:`, event);
+                // Formater la date et l'heure correctement
+                let dateStr = '';
+                let timeStr = event.time || '';
                 
-                const item = document.createElement('div');
-                item.className = 'timeline-item pb-4';
+                if (event.dateTime) {
+                    const date = new Date(event.dateTime);
+                    // Formater la date en DD/MM/YYYY
+                    const day = date.getDate().toString().padStart(2, '0');
+                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                    const year = date.getFullYear();
+                    dateStr = `${day}/${month}/${year}`;
+                }
                 
-                const timeElement = document.createElement('p');
-                timeElement.className = 'font-semibold text-indigo-600';
-                timeElement.textContent = event.timeHint || 'à‰vénement';
+                const importance = event.importance || 'medium';
+                const bgColors = {
+                    high: 'bg-red-50 border-red-400 hover:bg-red-100',
+                    medium: 'bg-blue-50 border-blue-400 hover:bg-blue-100',
+                    low: 'bg-gray-50 border-gray-400 hover:bg-gray-100'
+                };
                 
-                const descElement = document.createElement('p');
-                descElement.className = 'text-sm text-gray-700';
-                descElement.textContent = event.description || '';
-                
-                item.appendChild(timeElement);
-                item.appendChild(descElement);
-                container.appendChild(item);
-                
-                console.log(`LOG: Timeline item ${index} added to container`);
+                html += `
+                    <div class="timeline-event p-4 rounded-lg border-l-4 ${bgColors[importance]} transition-all duration-200 hover:shadow-md">
+                        <div class="flex items-start gap-3">
+                            <div class="flex-shrink-0 text-2xl">
+                                ${event.icon || '📅'}
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex flex-wrap items-baseline gap-2 mb-2">
+                                    <span class="font-bold text-gray-900">${dateStr}</span>
+                                    ${timeStr ? `<span class="text-indigo-600 font-semibold">${timeStr}</span>` : ''}
+                                </div>
+                                <div class="text-gray-800">
+                                    ${event.actor ? `<span class="font-semibold">${event.actor}</span>` : ''}
+                                    ${event.action ? `<span class="text-gray-600"> → ${event.action}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
             });
             
-            console.log("LOG: Timeline update complete");
+            html += `</div>`;
+            
+            // Ajouter un résumé
+            html += `
+                <div class="mt-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-indigo-600">${events.length}</div>
+                        <div class="text-sm text-gray-600">événement(s) dans la chronologie</div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            console.log("LOG: Timeline rendered with", events.length, "events");
             
         } catch (error) {
             console.error('LOG: Erreur timeline:', error);
             const container = document.getElementById('timeline-container');
             if (container) {
-                container.innerHTML = `<div class="text-center text-red-500 p-8">Erreur lors du chargement de la chronologie: ${error.message}</div>`;
+                container.innerHTML = `<div class="text-center text-red-500 p-8">
+                    Erreur: ${error.message}
+                </div>`;
             }
         }
+    }
+
+    formatTimeKey(timeKey) {
+        if (!timeKey) return 'Inconnu';
+        
+        // Gérer les différents formats de clés
+        if (timeKey.startsWith('unknown_date_')) {
+            return timeKey.replace('unknown_date_', '');
+        }
+        
+        if (timeKey.startsWith('relative_')) {
+            return timeKey.replace('relative_', '').replace('_', ' ');
+        }
+        
+        if (timeKey.startsWith('period_')) {
+            return timeKey.replace('period_', '');
+        }
+        
+        // Format date_heure
+        if (timeKey.includes('_')) {
+            const parts = timeKey.split('_');
+            if (parts[0].includes('-')) {
+                // Format date ISO
+                const date = parts[0];
+                const time = parts[1] || '';
+                return `${date} ${time}`.trim();
+            }
+        }
+        
+        return timeKey;
+    }
+
+    groupEventsByTime(events) {
+        const grouped = {};
+        
+        events.forEach(event => {
+            let key;
+            
+            if (event.dateTime) {
+                // Grouper par date et heure
+                const date = new Date(event.dateTime);
+                key = date.toISOString().split('T')[0] + '_' + (event.time || '00:00');
+            } else if (event.time) {
+                // Grouper par heure seulement
+                key = 'unknown_date_' + event.time;
+            } else if (event.relativeTime) {
+                // Grouper par temps relatif
+                key = 'relative_' + event.relativeTime;
+            } else if (event.period) {
+                // Grouper par période
+                key = 'period_' + event.period;
+            } else {
+                key = 'unknown';
+            }
+            
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(event);
+        });
+        
+        return grouped;
+    }
+
+    renderTimelineStats(events) {
+        const stats = {
+            total: events.length,
+            withActor: events.filter(e => e.actor).length,
+            withTime: events.filter(e => e.time || e.dateTime).length,
+            high: events.filter(e => e.importance === 'high').length,
+            medium: events.filter(e => e.importance === 'medium').length,
+            low: events.filter(e => e.importance === 'low').length
+        };
+        
+        return `
+            <div class="timeline-stats mt-6 p-4 bg-gray-50 rounded-lg">
+                <h4 class="font-semibold text-sm text-gray-700 mb-2">Statistiques</h4>
+                <div class="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                        <span class="text-gray-500">Total:</span>
+                        <span class="font-medium ml-1">${stats.total}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Avec acteur:</span>
+                        <span class="font-medium ml-1">${stats.withActor}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">Avec heure:</span>
+                        <span class="font-medium ml-1">${stats.withTime}</span>
+                    </div>
+                    <div>
+                        <span class="text-red-500">Haute imp.:</span>
+                        <span class="font-medium ml-1">${stats.high}</span>
+                    </div>
+                    <div>
+                        <span class="text-yellow-500">Moy. imp.:</span>
+                        <span class="font-medium ml-1">${stats.medium}</span>
+                    </div>
+                    <div>
+                        <span class="text-green-500">Faible imp.:</span>
+                        <span class="font-medium ml-1">${stats.low}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    attachTimelineInteractions() {
+        // Ajouter des interactions sur les événements de la timeline
+        const events = document.querySelectorAll('.timeline-event');
+        
+        events.forEach(event => {
+            // Effet de survol
+            event.addEventListener('mouseenter', (e) => {
+                e.currentTarget.style.transform = 'translateX(8px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            });
+            
+            event.addEventListener('mouseleave', (e) => {
+                e.currentTarget.style.transform = 'translateX(0)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+            });
+            
+            // Click pour voir les détails
+            event.addEventListener('click', (e) => {
+                const eventId = e.currentTarget.dataset.eventId;
+                console.log('Event clicked:', eventId);
+                
+                // Toggle expansion
+                const isExpanded = e.currentTarget.classList.contains('expanded');
+                if (isExpanded) {
+                    e.currentTarget.classList.remove('expanded');
+                    e.currentTarget.style.maxHeight = '100px';
+                } else {
+                    e.currentTarget.classList.add('expanded');
+                    e.currentTarget.style.maxHeight = 'none';
+                }
+            });
+        });
+        
+        // Ajouter des interactions sur les groupes de temps
+        const timeGroups = document.querySelectorAll('.timeline-group');
+        
+        timeGroups.forEach(group => {
+            const marker = group.querySelector('.timeline-marker');
+            if (marker) {
+                marker.addEventListener('click', () => {
+                    const events = group.querySelector('.timeline-events');
+                    if (events) {
+                        events.classList.toggle('collapsed');
+                        if (events.classList.contains('collapsed')) {
+                            events.style.display = 'none';
+                        } else {
+                            events.style.display = 'block';
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    renderTimeline(events) {
+        if (!events || events.length === 0) {
+            return `<div class="text-center text-gray-500 p-8">
+                Aucun événement chronologique détecté.
+                <br/>Ajoutez des marqueurs temporels dans vos notes.
+            </div>`;
+        }
+        
+        // Grouper les événements par jour/période
+        const groupedEvents = this.groupEventsByTime(events);
+        
+        let html = '<div class="timeline-container">';
+        
+        // Créer la ligne temporelle
+        html += '<div class="timeline-line"></div>';
+        
+        // Afficher les groupes d'événements
+        for (const [timeKey, group] of Object.entries(groupedEvents)) {
+            html += `
+                <div class="timeline-group" data-time="${timeKey}">
+                    <div class="timeline-marker">
+                        <div class="timeline-time">
+                            <span class="text-lg font-bold">${this.formatTimeKey(timeKey)}</span>
+                        </div>
+                    </div>
+                    <div class="timeline-events">
+            `;
+            
+            // Afficher les événements du groupe
+            group.forEach(event => {
+                const importance = event.importance || 'medium';
+                html += `
+                    <div class="timeline-event ${importance}" data-event-id="${event.id}">
+                        <div class="event-header">
+                            ${event.icon ? `<span class="event-icon">${event.icon}</span>` : ''}
+                            ${event.actor ? `<span class="event-actor">${event.actor}</span>` : ''}
+                            ${event.action ? `<span class="event-action">${event.action}</span>` : ''}
+                            ${event.target ? `<span class="event-target">${event.target}</span>` : ''}
+                        </div>
+                        ${event.location ? `<div class="event-location">📍 ${event.location}</div>` : ''}
+                        
+                        ${event.simultaneousEvents && event.simultaneousEvents.length > 0 ? `
+                            <div class="simultaneous-events">
+                                <span class="text-xs text-gray-500">Événements simultanés:</span>
+                                ${event.simultaneousEvents.map(se => 
+                                    `<div class="text-sm ml-2">• ${se.summary || se.rawDescription}</div>`
+                                ).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        
+        // Ajouter les statistiques
+        html += this.renderTimelineStats(events);
+        
+        return html;
+    }
+
+    groupEventsByTime(events) {
+        const grouped = {};
+        
+        events.forEach(event => {
+            let key;
+            
+            if (event.dateTime) {
+                // Grouper par date et heure
+                const date = new Date(event.dateTime);
+                key = date.toISOString().split('T')[0] + '_' + (event.time || '00:00');
+            } else if (event.time) {
+                // Grouper par heure seulement
+                key = 'unknown_date_' + event.time;
+            } else if (event.relativeTime) {
+                // Grouper par temps relatif
+                key = 'relative_' + event.relativeTime;
+            } else if (event.period) {
+                // Grouper par période
+                key = 'period_' + event.period;
+            } else {
+                key = 'unknown';
+            }
+            
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(event);
+        });
+        
+        return grouped;
     }
 
     async downloadN4LFile() {
@@ -849,6 +1138,8 @@ class N4LApp {
         URL.revokeObjectURL(url);
     }
 }
+
+
 
 // Initialiser l'application au chargement de la page
 document.addEventListener('DOMContentLoaded', () => {

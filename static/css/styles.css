@@ -535,3 +535,150 @@ body.graph-fullscreen #graph-controls {
     opacity: 0.9;
     transition: opacity 0.2s;
 }
+
+/* Timeline */
+.timeline-container {
+    position: relative;
+    padding: 20px;
+}
+
+.timeline-line {
+    position: absolute;
+    left: 50px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #6366f1, #8b5cf6);
+}
+
+.timeline-group {
+    position: relative;
+    margin-bottom: 40px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.timeline-marker {
+    position: relative;
+    width: 100px;
+    flex-shrink: 0;
+}
+
+.timeline-marker::before {
+    content: '';
+    position: absolute;
+    left: 40px;
+    top: 10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #6366f1;
+    border: 3px solid white;
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+    z-index: 1;
+}
+
+.timeline-time {
+    text-align: right;
+    padding-right: 70px;
+    padding-top: 5px;
+}
+
+.timeline-events {
+    flex: 1;
+    padding-left: 40px;
+}
+
+.timeline-event {
+    background: white;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-left: 3px solid #6366f1;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.timeline-event:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateX(4px);
+}
+
+.timeline-event.high {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.timeline-event.low {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+}
+
+.event-header {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.event-actor {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.event-action {
+    color: #6366f1;
+    font-style: italic;
+}
+
+.event-target {
+    color: #6b7280;
+}
+
+.event-location {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+.simultaneous-events {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #e5e7eb;
+}
+
+.timeline-wrapper {
+    position: relative;
+    padding-left: 40px;
+}
+
+.timeline-line {
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #6366f1, #8b5cf6);
+}
+
+.timeline-item {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.timeline-dot {
+    position: absolute;
+    left: -44px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #6366f1;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.timeline-item:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}

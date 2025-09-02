@@ -45,11 +45,40 @@ type ParsedN4L struct {
 	Notes    map[string][]string `json:"notes"`
 }
 
-// TimelineEvent représente un événement chronologique
+// TimelineEvent représente un événement chronologique enrichi
 type TimelineEvent struct {
-	Order       int    `json:"order"`
-	TimeHint    string `json:"timeHint"`
-	Description string `json:"description"`
+	ID           string     `json:"id"`
+	DateTime     *time.Time `json:"dateTime,omitempty"`
+	Time         string     `json:"time,omitempty"`
+	RelativeTime string     `json:"relativeTime,omitempty"`
+	Period       string     `json:"period,omitempty"`
+	IsAbsolute   bool       `json:"isAbsolute"`
+	IsRelative   bool       `json:"isRelative"`
+
+	// Composants extraits
+	Actor    string `json:"actor,omitempty"`
+	Action   string `json:"action,omitempty"`
+	Target   string `json:"target,omitempty"`
+	Location string `json:"location,omitempty"`
+
+	// Métadonnées
+	Context        string `json:"context"`
+	RawDescription string `json:"rawDescription"`
+	Summary        string `json:"summary,omitempty"`
+
+	// Relations
+	SimultaneousEvents []TimelineEvent `json:"simultaneousEvents,omitempty"`
+	LinkedEvents       []string        `json:"linkedEvents,omitempty"`
+
+	// Ordre et groupement
+	Order      int    `json:"order"`
+	GroupID    string `json:"groupId,omitempty"`
+	GroupLabel string `json:"groupLabel,omitempty"`
+
+	// Visualisation
+	Color      string `json:"color,omitempty"`
+	Icon       string `json:"icon,omitempty"`
+	Importance string `json:"importance,omitempty"`
 }
 
 // AnalyzePathRequest pour l'analyse de chemins

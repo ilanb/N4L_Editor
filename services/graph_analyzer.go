@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"n4l-editor/models"
@@ -406,43 +407,611 @@ func (ga *GraphAnalyzer) GetLayeredGraph(graphData models.GraphData) models.Laye
 	}
 }
 
-// GetTimelineEvents extrait les événements chronologiques
+// GetTimelineEvents extrait et organise les événements chronologiques
 func (ga *GraphAnalyzer) GetTimelineEvents(notes map[string][]string) []models.TimelineEvent {
 	var events []models.TimelineEvent
-	eventMap := make(map[string]models.TimelineEvent)
+	eventID := 0
 
-	timeRegexes := map[string]int{
-		`soirée`:    1,
-		`22h`:       2,
-		`lendemain`: 3,
+	// Pattern principal pour le format: "DD/MM/YYYY HHhMM -> Acteur -> Action"
+	mainPattern := regexp.MustCompile(`^(\d{2}/\d{2}/\d{4})\s+(\d{1,2}h\d{0,2})\s*->\s*([^->]+)\s*->\s*(.+)$`)
+
+	// Parcourir toutes les notes
+	for context, notesList := range notes {
+		for _, note := range notesList {
+			// Ignorer les séparateurs
+			note = strings.TrimSpace(note)
+			if strings.Contains(note, "---") || note == "" {
+				continue
+			}
+
+			// Essayer de matcher le pattern
+			if matches := mainPattern.FindStringSubmatch(note); len(matches) == 5 {
+				eventID++
+
+				dateStr := matches[1] // DD/MM/YYYY
+				timeStr := matches[2] // HHhMM
+				actor := strings.TrimSpace(matches[3])
+				action := strings.TrimSpace(matches[4])
+
+				event := models.TimelineEvent{
+					ID:             fmt.Sprintf("event_%d", eventID),
+					RawDescription: note,
+					Context:        context,
+					Order:          eventID,
+					Time:           timeStr,
+					Actor:          actor,
+					Action:         action,
+					Summary:        fmt.Sprintf("%s → %s", actor, action),
+					Importance:     "medium",
+					Color:          "#6366f1",
+					Icon:           "📅",
+				}
+
+				// Parser la date
+				dateTimeStr := fmt.Sprintf("%s %s", dateStr, timeStr)
+				if dt := ga.parseDateTime(dateTimeStr); dt != nil {
+					event.DateTime = dt
+					event.IsAbsolute = true
+				}
+
+				// Déterminer l'importance selon les mots-clés
+				// Chercher dans l'acteur ET l'action
+				lowerActor := strings.ToLower(actor)
+				lowerAction := strings.ToLower(action)
+				combined := lowerActor + " " + lowerAction
+
+				if strings.Contains(combined, "décès") || strings.Contains(combined, "mort") {
+					event.Importance = "high"
+					event.Color = "#ef4444"
+					event.Icon = "💀"
+				} else if strings.Contains(combined, "découv") || strings.Contains(combined, "corps") {
+					event.Importance = "high"
+					event.Color = "#f97316"
+					event.Icon = "🔍"
+				} else if strings.Contains(combined, "arrive") || strings.Contains(combined, "visite") {
+					event.Color = "#3b82f6"
+					event.Icon = "📍"
+				} else if strings.Contains(combined, "quitte") || strings.Contains(combined, "part") {
+					event.Color = "#10b981"
+					event.Icon = "🚪"
+				} else if strings.Contains(combined, "appel") || strings.Contains(combined, "téléphone") {
+					event.Icon = "📞"
+				} else if strings.Contains(combined, "police") || strings.Contains(combined, "détective") || strings.Contains(combined, "enquête") {
+					event.Icon = "👮"
+					event.Color = "#6366f1"
+				} else if strings.Contains(combined, "fenêtre") || strings.Contains(combined, "ouvre") {
+					event.Icon = "🪟"
+				} else if strings.Contains(combined, "thé") || strings.Contains(combined, "boit") {
+					event.Icon = "☕"
+				}
+
+				events = append(events, event)
+			}
+		}
+	}
+
+	// Trier par date/heure
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].DateTime != nil && events[j].DateTime != nil {
+			return events[i].DateTime.Before(*events[j].DateTime)
+		}
+		return events[i].Order < events[j].Order
+	})
+
+	return events
+}
+
+// hasTemporalMarker vérifie si une note contient des marqueurs temporels
+func (ga *GraphAnalyzer) hasTemporalMarker(note string) bool {
+	temporalPatterns := []string{
+		`\d{2}/\d{2}/\d{4}`, // Date
+		`\d{1,2}h\d{0,2}`,   // Heure
+		`matin`, `soir`, `midi`, `nuit`,
+		`avant`, `après`, `pendant`,
+		`lendemain`, `veille`,
+	}
+
+	lowerNote := strings.ToLower(note)
+	for _, pattern := range temporalPatterns {
+		if matched, _ := regexp.MatchString(pattern, lowerNote); matched {
+			return true
+		}
+	}
+	return false
+}
+
+// parseTimelineEvent extrait un événement d'une note
+func (ga *GraphAnalyzer) parseTimelineEvent(note, context string, patterns map[string]*regexp.Regexp) *models.TimelineEvent {
+	var event models.TimelineEvent
+
+	// Détecter date/heure absolue
+	if matches := patterns["datetime"].FindStringSubmatch(note); len(matches) > 0 {
+		event.DateTime = ga.parseDateTime(matches[0])
+		event.IsAbsolute = true
+	} else if matches := patterns["time"].FindStringSubmatch(note); len(matches) > 0 {
+		event.Time = ga.parseTime(matches[1])
+		event.IsAbsolute = false
+	}
+
+	// Détecter temps relatif
+	if matches := patterns["relative"].FindStringSubmatch(note); len(matches) > 0 {
+		event.RelativeTime = matches[1]
+		event.IsRelative = true
+	}
+
+	// Détecter période
+	if matches := patterns["period"].FindStringSubmatch(note); len(matches) > 0 {
+		event.Period = matches[1]
+	}
+
+	// Si aucun marqueur temporel, ignorer
+	if event.DateTime == nil && event.Time == "" && event.RelativeTime == "" && event.Period == "" {
+		return nil
+	}
+
+	// Extraire acteur et action
+	event.Actor, event.Action, event.Target = ga.extractEventComponents(note)
+	event.RawDescription = note
+	event.Context = context
+	event.ID = ga.generateEventID(note)
+
+	return &event
+}
+
+// extractEventComponents extrait acteur, action et cible
+func (ga *GraphAnalyzer) extractEventComponents(note string) (actor, action, target string) {
+	// Pattern pour relation N4L : "A -> action -> B"
+	relationPattern := regexp.MustCompile(`^([^->]+)\s*->\s*([^->]+)\s*->\s*(.+)$`)
+	if matches := relationPattern.FindStringSubmatch(note); len(matches) == 4 {
+		return strings.TrimSpace(matches[1]),
+			strings.TrimSpace(matches[2]),
+			strings.TrimSpace(matches[3])
+	}
+
+	// Pattern pour extraction intelligente
+	words := strings.Fields(note)
+
+	// Chercher le premier nom propre comme acteur
+	for i, word := range words {
+		if ga.isProperNoun(word) {
+			actor = word
+
+			// Chercher verbe après l'acteur
+			if i+1 < len(words) {
+				action = ga.extractVerb(words[i+1:])
+			}
+			break
+		}
+	}
+
+	return
+}
+
+// mergeTimelineEvents fusionne les événements au même moment
+func (ga *GraphAnalyzer) mergeTimelineEvents(events []models.TimelineEvent) []models.TimelineEvent {
+	merged := make(map[string]*models.TimelineEvent)
+
+	for _, event := range events {
+		key := ga.getEventTimeKey(event)
+
+		if existing, ok := merged[key]; ok {
+			// Fusionner les événements simultanés
+			existing.SimultaneousEvents = append(existing.SimultaneousEvents, event)
+		} else {
+			merged[key] = &event
+		}
+	}
+
+	// Convertir map en slice
+	var result []models.TimelineEvent
+	for _, event := range merged {
+		result = append(result, *event)
+	}
+
+	return result
+}
+
+// parseDateTime amélioré pour gérer le format DD/MM/YYYY HHhMM
+func (ga *GraphAnalyzer) parseDateTime(dateTimeStr string) *time.Time {
+	dateTimeStr = strings.TrimSpace(dateTimeStr)
+
+	// Remplacer 'h' par ':' pour normaliser l'heure
+	dateTimeStr = strings.Replace(dateTimeStr, "h", ":", 1)
+
+	// Formats à essayer
+	formats := []string{
+		"02/01/2006 15:04", // DD/MM/YYYY HH:MM
+		"02/01/2006 15:4",  // DD/MM/YYYY HH:M
+		"02/01/2006 15:0",  // DD/MM/YYYY HH:0
+		"02/01/2006",       // DD/MM/YYYY seul
+		"2/1/2006 15:04",   // D/M/YYYY HH:MM
+		"2/1/2006",         // D/M/YYYY seul
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, dateTimeStr); err == nil {
+			return &t
+		}
+	}
+
+	// Si rien ne marche, essayer de parser juste la date
+	parts := strings.Split(dateTimeStr, " ")
+	if len(parts) > 0 {
+		for _, format := range []string{"02/01/2006", "2/1/2006"} {
+			if t, err := time.Parse(format, parts[0]); err == nil {
+				return &t
+			}
+		}
+	}
+
+	return nil
+}
+
+// parseTime parse une heure seule
+func (ga *GraphAnalyzer) parseTime(timeStr string) string {
+	// Normaliser le format d'heure
+	timeStr = strings.ReplaceAll(timeStr, "h", ":")
+	if !strings.Contains(timeStr, ":") {
+		timeStr = timeStr + ":00"
+	}
+
+	// Vérifier le format
+	if matched, _ := regexp.MatchString(`^\d{1,2}:\d{2}$`, timeStr); matched {
+		return timeStr
+	}
+
+	return ""
+}
+
+// generateEventID génère un ID unique pour un événement
+func (ga *GraphAnalyzer) generateEventID(note string) string {
+	// Utiliser un hash simple pour l'ID
+	h := 0
+	for _, r := range note {
+		h = h*31 + int(r)
+	}
+	return fmt.Sprintf("event_%d", h)
+}
+
+// isProperNoun détermine si un mot est un nom propre
+func (ga *GraphAnalyzer) isProperNoun(word string) bool {
+	if len(word) < 2 {
+		return false
+	}
+
+	// Vérifier si commence par une majuscule
+	if !unicode.IsUpper(rune(word[0])) {
+		return false
+	}
+
+	// Exclure les mots communs qui commencent par majuscule
+	commonWords := []string{"Le", "La", "Les", "Un", "Une", "Des", "Il", "Elle"}
+	for _, common := range commonWords {
+		if word == common {
+			return false
+		}
+	}
+
+	return true
+}
+
+// extractVerb extrait le premier verbe trouvé dans une liste de mots
+func (ga *GraphAnalyzer) extractVerb(words []string) string {
+	// Liste de verbes courants dans les enquêtes
+	verbs := []string{
+		"arrive", "quitte", "visite", "rencontre", "découvre",
+		"trouve", "cache", "vole", "attaque", "fuit",
+		"entre", "sort", "appelle", "discute", "menace",
+		"observe", "suit", "attend", "cherche", "prend",
+	}
+
+	for _, word := range words {
+		lowerWord := strings.ToLower(word)
+		for _, verb := range verbs {
+			if strings.Contains(lowerWord, verb) {
+				return word
+			}
+		}
+	}
+
+	// Si pas de verbe trouvé, retourner le premier mot significatif
+	if len(words) > 0 {
+		return words[0]
+	}
+
+	return ""
+}
+
+// getEventTimeKey génère une clé pour regrouper les événements par temps
+func (ga *GraphAnalyzer) getEventTimeKey(event models.TimelineEvent) string {
+	if event.DateTime != nil {
+		return event.DateTime.Format("2006-01-02_15:04")
+	}
+
+	if event.Time != "" {
+		return "unknown_date_" + event.Time
+	}
+
+	if event.RelativeTime != "" {
+		return "relative_" + event.RelativeTime
+	}
+
+	if event.Period != "" {
+		return "period_" + event.Period
+	}
+
+	return fmt.Sprintf("unknown_%s", event.ID)
+}
+
+// sortTimelineEvents trie les événements par ordre chronologique
+func (ga *GraphAnalyzer) sortTimelineEvents(events []models.TimelineEvent) []models.TimelineEvent {
+	sort.Slice(events, func(i, j int) bool {
+		// D'abord trier par DateTime si disponible
+		if events[i].DateTime != nil && events[j].DateTime != nil {
+			return events[i].DateTime.Before(*events[j].DateTime)
+		}
+
+		// Si un seul a DateTime, il vient en premier
+		if events[i].DateTime != nil && events[j].DateTime == nil {
+			return true
+		}
+		if events[i].DateTime == nil && events[j].DateTime != nil {
+			return false
+		}
+
+		// Ensuite par Time
+		if events[i].Time != "" && events[j].Time != "" {
+			return events[i].Time < events[j].Time
+		}
+
+		// Puis par période
+		periodOrder := map[string]int{
+			"aube": 1, "matin": 2, "midi": 3, "après-midi": 4,
+			"soirée": 5, "soir": 6, "nuit": 7, "minuit": 8,
+		}
+
+		if events[i].Period != "" && events[j].Period != "" {
+			orderI := periodOrder[events[i].Period]
+			orderJ := periodOrder[events[j].Period]
+			if orderI != orderJ {
+				return orderI < orderJ
+			}
+		}
+
+		// Enfin par temps relatif
+		relativeOrder := map[string]int{
+			"avant-hier": 1, "veille": 2, "hier soir": 3,
+			"ce matin": 4, "midi": 5, "après-midi": 6,
+			"ce soir": 7, "cette nuit": 8, "lendemain": 9,
+			"demain matin": 10, "après-demain": 11,
+		}
+
+		if events[i].RelativeTime != "" && events[j].RelativeTime != "" {
+			orderI := relativeOrder[events[i].RelativeTime]
+			orderJ := relativeOrder[events[j].RelativeTime]
+			return orderI < orderJ
+		}
+
+		// Par défaut, garder l'ordre original
+		return events[i].Order < events[j].Order
+	})
+
+	// Réassigner les ordres après tri
+	for i := range events {
+		events[i].Order = i
+	}
+
+	return events
+}
+
+// enrichWithTemporalRelations enrichit les événements avec leurs relations temporelles
+func (ga *GraphAnalyzer) enrichWithTemporalRelations(events []models.TimelineEvent, notes map[string][]string) []models.TimelineEvent {
+	// Analyser les notes pour trouver des relations temporelles explicites
+	temporalRelations := ga.extractTemporalRelations(notes)
+
+	// Appliquer les relations aux événements
+	for i := range events {
+		for _, relation := range temporalRelations {
+			if ga.eventMatchesRelation(events[i], relation) {
+				// Trouver l'événement lié
+				for j := range events {
+					if i != j && ga.eventMatchesRelation(events[j], relation) {
+						events[i].LinkedEvents = append(events[i].LinkedEvents, events[j].ID)
+					}
+				}
+			}
+		}
+
+		// Déterminer l'importance
+		events[i].Importance = ga.determineEventImportance(events[i])
+
+		// Assigner une couleur selon le type
+		events[i].Color = ga.getEventColor(events[i])
+
+		// Assigner un icône
+		events[i].Icon = ga.getEventIcon(events[i])
+
+		// Générer un résumé
+		if events[i].Summary == "" {
+			events[i].Summary = ga.generateEventSummary(events[i])
+		}
+	}
+
+	return events
+}
+
+// extractTemporalRelations extrait les relations temporelles des notes
+func (ga *GraphAnalyzer) extractTemporalRelations(notes map[string][]string) []map[string]string {
+	var relations []map[string]string
+
+	relationPatterns := []string{
+		"avant", "après", "pendant", "suite à", "provoque",
+		"déclenche", "simultanément", "en même temps que",
 	}
 
 	for _, notesList := range notes {
 		for _, note := range notesList {
-			for pattern, order := range timeRegexes {
-				re := regexp.MustCompile(pattern)
-				if re.MatchString(note) {
-					if _, exists := eventMap[note]; !exists {
-						eventMap[note] = models.TimelineEvent{
-							Order:       order,
-							TimeHint:    pattern,
-							Description: note,
-						}
-					}
+			lowerNote := strings.ToLower(note)
+			for _, pattern := range relationPatterns {
+				if strings.Contains(lowerNote, pattern) {
+					relations = append(relations, map[string]string{
+						"note":     note,
+						"relation": pattern,
+					})
 				}
 			}
 		}
 	}
 
-	for _, event := range eventMap {
-		events = append(events, event)
+	return relations
+}
+
+// eventMatchesRelation vérifie si un événement correspond à une relation
+func (ga *GraphAnalyzer) eventMatchesRelation(event models.TimelineEvent, relation map[string]string) bool {
+	noteWords := strings.Fields(strings.ToLower(relation["note"]))
+	eventWords := strings.Fields(strings.ToLower(event.RawDescription))
+
+	matchCount := 0
+	for _, ew := range eventWords {
+		for _, nw := range noteWords {
+			if ew == nw {
+				matchCount++
+			}
+		}
 	}
 
-	sort.Slice(events, func(i, j int) bool {
-		return events[i].Order < events[j].Order
-	})
+	// Si plus de 30% des mots correspondent
+	return float64(matchCount)/float64(len(eventWords)) > 0.3
+}
 
-	return events
+// determineEventImportance détermine l'importance d'un événement
+func (ga *GraphAnalyzer) determineEventImportance(event models.TimelineEvent) string {
+	score := 0
+
+	// Événements avec acteur identifié sont plus importants
+	if event.Actor != "" {
+		score += 2
+	}
+
+	// Événements avec action claire
+	if event.Action != "" {
+		score += 1
+	}
+
+	// Événements avec DateTime précis
+	if event.DateTime != nil {
+		score += 2
+	}
+
+	// Événements liés à d'autres
+	if len(event.LinkedEvents) > 0 {
+		score += len(event.LinkedEvents)
+	}
+
+	// Événements simultanés
+	if len(event.SimultaneousEvents) > 0 {
+		score += 2
+	}
+
+	// Mots-clés importants
+	importantWords := []string{
+		"mort", "décès", "meurtre", "découverte", "preuve",
+		"disparition", "vol", "attaque", "fuite", "arrestation",
+	}
+
+	lowerDesc := strings.ToLower(event.RawDescription)
+	for _, word := range importantWords {
+		if strings.Contains(lowerDesc, word) {
+			score += 3
+			break
+		}
+	}
+
+	if score >= 5 {
+		return "high"
+	} else if score >= 3 {
+		return "medium"
+	}
+	return "low"
+}
+
+// getEventColor retourne une couleur selon le type d'événement
+func (ga *GraphAnalyzer) getEventColor(event models.TimelineEvent) string {
+	lowerDesc := strings.ToLower(event.RawDescription)
+
+	// Rouge pour événements critiques
+	if strings.Contains(lowerDesc, "mort") || strings.Contains(lowerDesc, "meurtre") ||
+		strings.Contains(lowerDesc, "décès") || strings.Contains(lowerDesc, "attaque") {
+		return "#ef4444"
+	}
+
+	// Orange pour découvertes
+	if strings.Contains(lowerDesc, "découv") || strings.Contains(lowerDesc, "trouv") ||
+		strings.Contains(lowerDesc, "preuve") {
+		return "#f97316"
+	}
+
+	// Bleu pour mouvements
+	if strings.Contains(lowerDesc, "arriv") || strings.Contains(lowerDesc, "quit") ||
+		strings.Contains(lowerDesc, "entre") || strings.Contains(lowerDesc, "sort") {
+		return "#3b82f6"
+	}
+
+	// Vert pour rencontres
+	if strings.Contains(lowerDesc, "rencontr") || strings.Contains(lowerDesc, "discut") ||
+		strings.Contains(lowerDesc, "parl") {
+		return "#10b981"
+	}
+
+	// Violet par défaut
+	return "#8b5cf6"
+}
+
+// getEventIcon retourne un emoji selon le type d'événement
+func (ga *GraphAnalyzer) getEventIcon(event models.TimelineEvent) string {
+	lowerDesc := strings.ToLower(event.RawDescription)
+
+	if strings.Contains(lowerDesc, "mort") || strings.Contains(lowerDesc, "décès") {
+		return "💀"
+	}
+	if strings.Contains(lowerDesc, "découv") || strings.Contains(lowerDesc, "trouv") {
+		return "🔍"
+	}
+	if strings.Contains(lowerDesc, "arriv") || strings.Contains(lowerDesc, "entre") {
+		return "📍"
+	}
+	if strings.Contains(lowerDesc, "quit") || strings.Contains(lowerDesc, "sort") {
+		return "🚪"
+	}
+	if strings.Contains(lowerDesc, "rencontr") || strings.Contains(lowerDesc, "discut") {
+		return "💬"
+	}
+	if strings.Contains(lowerDesc, "preuve") || strings.Contains(lowerDesc, "indice") {
+		return "🔎"
+	}
+	if strings.Contains(lowerDesc, "police") || strings.Contains(lowerDesc, "enquêt") {
+		return "👮"
+	}
+
+	return "📌"
+}
+
+// generateEventSummary génère un résumé court de l'événement
+func (ga *GraphAnalyzer) generateEventSummary(event models.TimelineEvent) string {
+	if event.Actor != "" && event.Action != "" {
+		if event.Target != "" {
+			return fmt.Sprintf("%s %s %s", event.Actor, event.Action, event.Target)
+		}
+		return fmt.Sprintf("%s %s", event.Actor, event.Action)
+	}
+
+	// Extraire les mots clés principaux
+	words := strings.Fields(event.RawDescription)
+	if len(words) > 5 {
+		return strings.Join(words[:5], " ") + "..."
+	}
+
+	return event.RawDescription
 }
 
 // --- Méthodes privées ---
