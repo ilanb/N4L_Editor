@@ -353,6 +353,23 @@ export class GraphManager {
             }
         };
         menu.appendChild(coneOption);
+
+        // Dans handleGraphRightClick, modifiez l'option d'analyse :
+        const analyzeOption = document.createElement('a');
+        analyzeOption.textContent = "🤖 Analyser le cône avec l'IA";
+        analyzeOption.onclick = async (e) => {
+            console.log('DEBUG: Clic sur Analyser le cône, nodeId:', nodeId);
+            e.preventDefault();
+            e.stopPropagation();
+            menu.classList.add('hidden');
+            
+            try {
+                await this.analyzeExpansionCone(nodeId);
+            } catch (error) {
+                console.error('DEBUG: Erreur lors du clic analyse:', error);
+            }
+        };
+        menu.appendChild(analyzeOption);
     
         // --- Option 2: Réinitialiser la vue ---
         const resetOption = document.createElement('a');
@@ -1192,6 +1209,133 @@ export class GraphManager {
                 text: `Impossible de calculer le cône: ${error.message}`
             });
         }
+    }
+
+    async analyzeExpansionCone(nodeId) {
+        console.log('DEBUG: Début analyzeExpansionCone pour nodeId:', nodeId);
+        try {
+            // Récupérer les données du cône
+            console.log('DEBUG: Envoi requête pour récupérer le cône...');
+            const response = await fetch('/api/graph/expansion-cone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nodeId: nodeId,
+                    depth: 3,
+                    graphData: this.app.state.allGraphData
+                })
+            });
+
+            console.log('DEBUG: Réponse expansion-cone:', response.status, response.ok);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('DEBUG: Erreur expansion-cone:', errorText);
+                throw new Error(errorText);
+            }
+
+            const cone = await response.json();
+            console.log('DEBUG: Données du cône reçues:', cone);
+            
+            // Préparer les données pour l'analyse
+            const nodes = cone.nodeIds.map(id => ({ id: id }));
+            const links = cone.edges;
+            
+            console.log('DEBUG: Données préparées - nodes:', nodes.length, 'links:', links.length);
+
+            // Afficher le loader
+            this.showAnalysisLoader();
+
+            // Analyser avec l'IA
+            console.log('DEBUG: Envoi requête analyse IA...');
+            const analysisResponse = await fetch('/api/analyze-expansion-cone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    centralNode: nodeId,
+                    nodes: nodes,
+                    links: links
+                })
+            });
+
+            console.log('DEBUG: Réponse analyse IA:', analysisResponse.status, analysisResponse.ok);
+
+            if (!analysisResponse.ok) {
+                const errorText = await analysisResponse.text();
+                console.error('DEBUG: Erreur analyse IA:', errorText);
+                throw new Error(errorText);
+            }
+
+            const analysisData = await analysisResponse.json();
+            console.log('DEBUG: Analyse reçue:', analysisData);
+            
+            // Afficher l'analyse
+            this.displayExpansionAnalysis(analysisData.analysis, nodeId);
+            
+        } catch (error) {
+            console.error('DEBUG: Erreur complète dans analyzeExpansionCone:', error);
+            await this.app.utils.showModal({
+                title: 'Erreur',
+                text: `Impossible d'analyser le cône: ${error.message}`
+            });
+        } finally {
+            console.log('DEBUG: Fin analyzeExpansionCone');
+            this.hideAnalysisLoader();
+        }
+    }
+
+    displayExpansionAnalysis(analysis, nodeId) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl max-h-[80vh] w-full mx-4 flex flex-col">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">Analyse IA du Cône d'Expansion</h2>
+                        <p class="text-sm text-gray-600 mt-1">Nœud central: ${nodeId}</p>
+                    </div>
+                    <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6">
+                    <div class="prose max-w-none" id="expansion-analysis-content">
+                        ${marked.parse(analysis)}
+                    </div>
+                </div>
+                <div class="p-4 border-t flex justify-end space-x-2">
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('expansion-analysis-content').innerText).then(() => alert('Copié!'))" 
+                            class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        Copier l'analyse
+                    </button>
+                    <button onclick="this.closest('.fixed').remove()" 
+                            class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                        Fermer
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    showAnalysisLoader() {
+        const loader = document.createElement('div');
+        loader.id = 'analysis-loader';
+        loader.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40';
+        loader.innerHTML = `
+            <div class="bg-white rounded-lg p-6 flex items-center space-x-4">
+                <div class="spinner"></div>
+                <span>Analyse du cône en cours...</span>
+            </div>
+        `;
+        document.body.appendChild(loader);
+    }
+
+    hideAnalysisLoader() {
+        const loader = document.getElementById('analysis-loader');
+        if (loader) loader.remove();
     }
 
     async findAndHighlightClusters() {

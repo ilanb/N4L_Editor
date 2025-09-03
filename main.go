@@ -63,6 +63,7 @@ func setupAPIRoutes(
 	http.HandleFunc("/api/layered-graph", graph.GetLayeredGraph)
 	http.HandleFunc("/api/analyze-path", graph.AnalyzePath)
 	http.HandleFunc("/api/graph/expansion-cone", graph.GetExpansionCone)
+	http.HandleFunc("/api/analyze-expansion-cone", graph.AnalyzeExpansionCone)
 	http.HandleFunc("/api/find-clusters", graph.FindClusters)
 	http.HandleFunc("/api/analyze-clusters", graph.AnalyzeClusters)
 

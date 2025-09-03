@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -187,4 +188,72 @@ func (h *GraphHandler) AnalyzeClusters(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Write([]byte(analysis))
+}
+
+// AnalyzeExpansionCone analyse le cône d'expansion avec l'IA
+func (h *GraphHandler) AnalyzeExpansionCone(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("DEBUG: AnalyzeExpansionCone appelée")
+
+	var req struct {
+		CentralNode string        `json:"centralNode"`
+		Nodes       []models.Node `json:"nodes"`
+		Links       []models.Edge `json:"links"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		fmt.Printf("DEBUG: Erreur décodage JSON: %v\n", err)
+		http.Error(w, "Données invalides", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Printf("DEBUG: Analyse demandée pour nœud: %s, %d nodes, %d links\n",
+		req.CentralNode, len(req.Nodes), len(req.Links))
+
+	// Construire le prompt pour l'analyse
+	var prompt strings.Builder
+	prompt.WriteString("Analyse le cône d'expansion suivant d'un graphe de connaissances.\n\n")
+	prompt.WriteString("NŒUD CENTRAL: " + req.CentralNode + "\n\n")
+
+	prompt.WriteString("NŒUDS CONNECTÉS:\n")
+	for _, node := range req.Nodes {
+		prompt.WriteString("- " + node.ID + "\n")
+	}
+
+	prompt.WriteString("\nRELATIONS:\n")
+	for _, link := range req.Links {
+		prompt.WriteString(fmt.Sprintf("- %s → %s (type: %s)\n", link.From, link.To, link.Type))
+	}
+
+	prompt.WriteString("\nFournis une analyse détaillée de ce cône d'expansion en identifiant:\n")
+	prompt.WriteString("1. Les patterns et structures principales\n")
+	prompt.WriteString("2. Les clusters thématiques\n")
+	prompt.WriteString("3. Les nœuds pivots ou points de convergence\n")
+	prompt.WriteString("4. Les chemins de connaissance significatifs\n")
+	prompt.WriteString("5. Les insights sur l'organisation de l'information\n")
+	prompt.WriteString("6. Les recommandations pour l'exploration future\n")
+	prompt.WriteString("\nFormat ta réponse en markdown avec des sections claires.")
+
+	fmt.Println("DEBUG: Appel à Ollama...")
+
+	// Appeler Ollama pour l'analyse
+	analysis, err := h.ollamaService.Generate(prompt.String(), "")
+	if err != nil {
+		fmt.Printf("DEBUG: Erreur Ollama: %v\n", err)
+		http.Error(w, fmt.Sprintf("Erreur lors de l'analyse: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Printf("DEBUG: Analyse reçue, longueur: %d caractères\n", len(analysis))
+
+	// Retourner l'analyse
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]string{
+		"analysis": analysis,
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		fmt.Printf("DEBUG: Erreur encodage réponse: %v\n", err)
+	}
+
+	fmt.Println("DEBUG: Réponse envoyée avec succès")
 }
