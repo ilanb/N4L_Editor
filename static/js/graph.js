@@ -101,6 +101,11 @@ export class GraphManager {
                         class="bg-purple-500 text-white px-4 py-2 rounded-md text-sm">
                     Rechercher Clusters
                 </button>
+                <button id="cluster-ai-suggest-btn" 
+                        class="bg-green-500 text-white px-3 py-2 rounded-md text-sm"
+                        title="Utiliser l'IA pour suggérer des clusters">
+                    IA
+                </button>
                 
                 <button id="cluster-analyze-btn" 
                         class="bg-sky-500 text-white px-4 py-2 rounded-md text-sm hidden items-center">
@@ -171,6 +176,7 @@ export class GraphManager {
             'discover-paths-btn': () => this.discoverAllPaths(),
             'cluster-search-btn': () => this.findAndHighlightClusters(),
             'cluster-analyze-btn': () => this.analyzeClustersWithAI(),
+            'cluster-ai-suggest-btn': () => this.suggestClustersWithAI(),
             'view-standard': () => this.switchViewMode('standard'),
             'view-layered': () => this.switchViewMode('layered'),
             'view-circular': () => this.switchViewMode('circular'),
@@ -1540,5 +1546,62 @@ export class GraphManager {
 
         // Centrer la vue sur le chemin
         this.cy.fit(pathNodes, 50);
+    }
+
+    // Nouvelle méthode pour suggérer des clusters avec l'IA
+    async suggestClustersWithAI() {
+        const aiBtn = document.getElementById('cluster-ai-suggest-btn');
+        const input = document.getElementById('cluster-search-input');
+        
+        if (!this.app.state.allGraphData || !this.app.state.allGraphData.nodes) {
+            await this.app.utils.showModal({
+                title: 'Erreur',
+                text: 'Aucun graphe chargé. Veuillez d\'abord charger un graphe.'
+            });
+            return;
+        }
+        
+        // Désactiver le bouton et afficher un indicateur de chargement
+        const originalText = aiBtn.innerHTML;
+        aiBtn.disabled = true;
+        aiBtn.innerHTML = '⏳';
+        
+        try {
+            const response = await fetch('/api/density/suggest-clusters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.app.state.allGraphData)
+            });
+            
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+            
+            const result = await response.json();
+            
+            if (result.terms && result.terms.length > 0) {
+                // Remplir l'input avec les termes suggérés
+                input.value = result.terms.join(', ');
+                
+                // Afficher une notification
+                await this.app.utils.showModal({
+                    title: 'Clusters suggérés par l\'IA',
+                    text: `L'IA a identifié les clusters suivants : ${result.terms.join(', ')}. Cliquez sur "Rechercher Clusters" pour les visualiser.`
+                });
+            } else {
+                throw new Error('Aucun cluster suggéré');
+            }
+            
+        } catch (error) {
+            console.error('Erreur IA:', error);
+            await this.app.utils.showModal({
+                title: 'Erreur',
+                text: `Erreur IA : ${error.message}`
+            });
+        } finally {
+            // Réactiver le bouton
+            aiBtn.disabled = false;
+            aiBtn.innerHTML = originalText;
+        }
     }
 }

@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"sort"
+	"strings"
 
 	"n4l-editor/models"
 	"n4l-editor/services"
@@ -829,4 +831,97 @@ func (h *DensityHandler) calculateAverageDensity(graph models.GraphData) float64
 		}
 	}
 	return totalDensity / float64(len(clusters))
+}
+
+// SuggestClustersWithAI utilise l'IA pour suggérer des termes de clustering
+func (h *DensityHandler) SuggestClustersWithAI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req models.GraphData
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Préparer le contexte pour l'IA
+	graphContext := h.prepareGraphContextForAI(req)
+
+	// Créer le service Ollama
+	ollamaService := services.NewOllamaService("http://localhost:11434/api/generate")
+
+	prompt := fmt.Sprintf(`Analyse ce graphe de concepts et identifie les principaux clusters thématiques.
+Contexte du graphe:
+%s
+
+Réponds UNIQUEMENT avec une liste de mots-clés séparés par des virgules qui représentent les clusters principaux.
+Format attendu: mot1,mot2,mot3
+Limite-toi à 5-7 termes maximum.`, graphContext)
+
+	// Utiliser Generate
+	suggestedTerms, err := ollamaService.Generate(prompt, "")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Erreur IA: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Nettoyer et formater la réponse
+	terms := strings.Split(suggestedTerms, ",")
+	cleanTerms := []string{}
+	for _, term := range terms {
+		cleaned := strings.TrimSpace(term)
+		if cleaned != "" {
+			cleanTerms = append(cleanTerms, cleaned)
+		}
+	}
+
+	response := map[string]interface{}{
+		"terms": cleanTerms,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// prepareGraphContextForAI prépare un résumé du graphe pour l'IA
+func (h *DensityHandler) prepareGraphContextForAI(graph models.GraphData) string {
+	var context strings.Builder
+
+	// Lister les nœuds principaux
+	context.WriteString("Nœuds principaux:\n")
+	maxNodes := 30
+	for i, node := range graph.Nodes {
+		if i >= maxNodes {
+			break
+		}
+		context.WriteString(fmt.Sprintf("- %s\n", node.Label))
+	}
+
+	// Identifier les hubs
+	hubs := h.identifyHubs(graph)
+	if len(hubs) > 0 {
+		context.WriteString("\nNœuds centraux (hubs):\n")
+		for _, hubID := range hubs {
+			for _, node := range graph.Nodes {
+				if node.ID == hubID {
+					context.WriteString(fmt.Sprintf("- %s\n", node.Label))
+					break
+				}
+			}
+		}
+	}
+
+	// Types de relations
+	edgeTypes := make(map[string]int)
+	for _, edge := range graph.Edges {
+		edgeTypes[edge.Type]++
+	}
+	context.WriteString("\nTypes de relations:\n")
+	for edgeType, count := range edgeTypes {
+		context.WriteString(fmt.Sprintf("- %s: %d\n", edgeType, count))
+	}
+
+	return context.String()
 }

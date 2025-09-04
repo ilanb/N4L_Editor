@@ -66,6 +66,7 @@ func setupAPIRoutes(
 	http.HandleFunc("/api/analyze-expansion-cone", graph.AnalyzeExpansionCone)
 	http.HandleFunc("/api/find-clusters", graph.FindClusters)
 	http.HandleFunc("/api/analyze-clusters", graph.AnalyzeClusters)
+	http.HandleFunc("/api/density/suggest-clusters", density.SuggestClustersWithAI)
 
 	// Analyse
 	http.HandleFunc("/api/analyze-graph", analysis.AnalyzeGraph)
